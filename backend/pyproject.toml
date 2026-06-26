@@ -1,0 +1,43 @@
+[project]
+name = "rumi-ai"
+version = "0.1.0"
+description = "Training domain Agent with RAG and skills"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=1.2.3",
+    "langgraph>=1.1.9",
+    "langgraph-api>=0.10.0",
+    "langgraph-cli>=0.4.27",
+    "langchain-openai>=0.3",
+    "langchain-community>=0.3",
+    "langchain-text-splitters>=0.3",
+    "dashscope>=1.20",
+    "fastapi>=0.115",
+    "uvicorn>=0.34",
+    "chromadb>=1.0",
+    "python-multipart>=0.0.20",
+    "aiosqlite>=0.21",
+    "python-docx>=1.1",
+    "pymupdf>=1.25",
+    "httpx>=0.28",
+    "python-dotenv>=1.1",
+    "pyyaml>=6.0",
+    "langchain-deepseek>=1.1.0",
+    "python-pptx>=1.0",
+    "Pillow>=10.0",
+]
+
+[project.optional-dependencies]
+oss = ["oss2>=2.18"]
+dev = ["pytest>=8", "pytest-asyncio>=0.25", "ruff>=0.11"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src"]
+
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"

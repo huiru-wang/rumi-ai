@@ -1,0 +1,827 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>奶油粗野主义 · 风格预览</title>
+
+  <!-- Fonts: fonts.loli.net (China-accessible Google Fonts mirror) -->
+  <link rel="preconnect" href="https://fonts.loli.net" />
+  <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Archivo+Black&family=Archivo:wght@400;500;600;700&family=Space+Grotesk:wght@400;500;600;700&family=Nunito:wght@400;500;600;700&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" />
+
+  <style>
+    /* ===========================================
+       THEME VARIABLES — Cream Brutalism
+       奶白底 + 墨黑框 + 糖果色卡片
+       =========================================== */
+    :root {
+      --bg-primary: #FAF9F6;
+      --bg-secondary: #FFFFFF;
+      --text-primary: #111111;
+      --text-secondary: #555555;
+      --accent-main: #111111;
+      --accent-highlight: #A8E6A3;
+      --accent-muted: #B8E7F7;
+      --surface: #F0F0F0;
+      --accent-pink: #F9B1E0;
+      --accent-yellow: #FFD66B;
+      --accent-cream: #F5F1E8;
+
+      --font-display: "Archivo Black", "Noto Sans SC", sans-serif;
+      --font-heading: "Archivo", "Noto Sans SC", sans-serif;
+      --font-body: "Nunito", "Noto Sans SC", sans-serif;
+      --font-label: "Space Grotesk", "Noto Sans SC", sans-serif;
+
+      --title-size: clamp(2.2rem, 7.5vw, 6.5rem);
+      --subtitle-size: clamp(0.85rem, 1.6vw, 1.15rem);
+      --body-size: clamp(0.8rem, 1.4vw, 1rem);
+      --label-size: clamp(0.65rem, 1vw, 0.8rem);
+      --card-title-size: clamp(1rem, 2vw, 1.5rem);
+      --card-num-size: clamp(1.6rem, 3.5vw, 3rem);
+
+      --slide-padding: clamp(1rem, 3.5vw, 3.5rem);
+      --content-gap: clamp(0.75rem, 1.8vw, 1.5rem);
+      --element-gap: clamp(0.4rem, 1vw, 0.9rem);
+
+      --border-thick: clamp(3px, 0.35vw, 5px);
+      --shadow-offset: clamp(4px, 0.6vw, 7px);
+
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration-normal: 0.65s;
+    }
+
+    /* ===========================================
+       BASE RESET
+       =========================================== */
+    *, *::before, *::after {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
+
+    html, body {
+      height: 100%;
+      overflow-x: hidden;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      font-family: var(--font-body);
+      -webkit-font-smoothing: antialiased;
+    }
+
+    /* ===========================================
+       VIEWPORT FITTING: MANDATORY BASE STYLES
+       Include this ENTIRE file in every presentation.
+       =========================================== */
+    html {
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+    }
+
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-height: 100%;
+      overflow: hidden;
+      padding: var(--slide-padding);
+    }
+
+    .card, .container, .content-box {
+      max-width: min(90vw, 1000px);
+      max-height: min(80vh, 700px);
+    }
+
+    .feature-list, .bullet-list {
+      gap: clamp(0.4rem, 1vh, 1rem);
+    }
+
+    .feature-list li, .bullet-list li {
+      font-size: var(--body-size);
+      line-height: 1.4;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
+      gap: clamp(0.5rem, 1.5vw, 1rem);
+    }
+
+    img, .image-container {
+      max-width: 100%;
+      max-height: min(50vh, 400px);
+      object-fit: contain;
+    }
+
+    @media (max-height: 700px) {
+      :root {
+        --slide-padding: clamp(0.75rem, 3vw, 2rem);
+        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+        --title-size: clamp(1.8rem, 6.5vw, 4.5rem);
+        --card-title-size: clamp(0.9rem, 1.8vw, 1.25rem);
+      }
+    }
+
+    @media (max-height: 600px) {
+      :root {
+        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+        --title-size: clamp(1.5rem, 5.5vw, 3.5rem);
+        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+        --card-title-size: clamp(0.8rem, 1.6vw, 1.1rem);
+      }
+      .nav-dots, .decorative {
+        display: none;
+      }
+    }
+
+    @media (max-height: 500px) {
+      :root {
+        --slide-padding: clamp(0.4rem, 2vw, 1rem);
+        --title-size: clamp(1.3rem, 5vw, 2.5rem);
+        --body-size: clamp(0.65rem, 1vw, 0.85rem);
+      }
+    }
+
+    @media (max-width: 600px) {
+      :root {
+        --title-size: clamp(1.8rem, 9vw, 3rem);
+      }
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+      }
+      html {
+        scroll-behavior: auto;
+      }
+    }
+
+    /* ===========================================
+       COVER SLIDE — Cream Brutalism
+       =========================================== */
+    .cover-slide {
+      background-color: var(--bg-primary);
+      background-image:
+        url("data:image/svg+xml,%3Csvg viewBox='0 0 400 400' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noiseFilter'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noiseFilter)' opacity='0.04'/%3E%3C/svg%3E");
+      background-size: 200px 200px;
+    }
+
+    /* Thick black outer frame */
+    .cover-frame {
+      flex: 1;
+      margin: var(--slide-padding);
+      border: var(--border-thick) solid var(--accent-main);
+      background: var(--bg-secondary);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+      overflow: hidden;
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--accent-main);
+    }
+
+    /* Top header bar */
+    .cover-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: clamp(0.6rem, 1.5vw, 1.2rem) clamp(0.9rem, 2vw, 1.8rem);
+      border-bottom: var(--border-thick) solid var(--accent-main);
+      gap: var(--element-gap);
+    }
+
+    .header-pill {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 600;
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      padding: 0.45em 1.1em;
+      border: calc(var(--border-thick) - 1px) solid var(--accent-main);
+      border-radius: 999px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      box-shadow: calc(var(--shadow-offset) / 2) calc(var(--shadow-offset) / 2) 0 0 var(--accent-main);
+      white-space: nowrap;
+    }
+
+    .header-tags {
+      display: flex;
+      gap: var(--element-gap);
+      flex-wrap: wrap;
+      justify-content: flex-end;
+    }
+
+    .header-tag {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 500;
+      letter-spacing: 0.06em;
+      padding: 0.4em 0.9em;
+      border: calc(var(--border-thick) - 1px) solid var(--accent-main);
+      border-radius: 999px;
+      white-space: nowrap;
+    }
+
+    .header-tag.pink { background: var(--accent-pink); }
+    .header-tag.yellow { background: var(--accent-yellow); }
+
+    /* Main cover body */
+    .cover-body {
+      flex: 1;
+      display: grid;
+      grid-template-columns: 1.1fr 0.9fr;
+      gap: clamp(1rem, 3vw, 3rem);
+      padding: clamp(1rem, 3vw, 3rem);
+      align-items: center;
+      min-height: 0;
+    }
+
+    /* Left title area */
+    .title-area {
+      display: flex;
+      flex-direction: column;
+      gap: var(--content-gap);
+      min-width: 0;
+    }
+
+    .guide-label {
+      align-self: flex-start;
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      padding: 0.5em 1.1em;
+      background: var(--accent-main);
+      color: var(--bg-primary);
+      border-radius: 999px;
+    }
+
+    .en-title {
+      font-family: var(--font-display);
+      font-size: var(--title-size);
+      line-height: 0.92;
+      letter-spacing: -0.03em;
+      color: var(--text-primary);
+      text-transform: uppercase;
+      word-break: break-word;
+    }
+
+    .cn-title-box {
+      align-self: flex-start;
+      background: var(--accent-yellow);
+      border: var(--border-thick) solid var(--accent-main);
+      padding: 0.35em 0.7em;
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--accent-main);
+    }
+
+    .cn-title {
+      font-family: var(--font-heading);
+      font-size: clamp(1.4rem, 4vw, 3rem);
+      font-weight: 700;
+      letter-spacing: -0.02em;
+      color: var(--text-primary);
+      line-height: 1.1;
+    }
+
+    .subtitle {
+      font-family: var(--font-body);
+      font-size: var(--subtitle-size);
+      line-height: 1.55;
+      color: var(--text-secondary);
+      max-width: min(90%, 520px);
+    }
+
+    /* Right cards stack */
+    .cards-area {
+      display: flex;
+      flex-direction: column;
+      gap: var(--content-gap);
+      min-width: 0;
+    }
+
+    .feature-card {
+      border: var(--border-thick) solid var(--accent-main);
+      padding: clamp(0.8rem, 1.8vw, 1.4rem);
+      display: flex;
+      align-items: flex-start;
+      gap: clamp(0.6rem, 1.2vw, 1rem);
+      box-shadow: var(--shadow-offset) var(--shadow-offset) 0 0 var(--accent-main);
+      transition: transform 0.25s var(--ease-out-expo);
+      min-height: 0;
+    }
+
+    .feature-card:hover {
+      transform: translate(calc(-1 * var(--shadow-offset) / 2), calc(-1 * var(--shadow-offset) / 2));
+    }
+
+    .feature-card.green { background: var(--accent-highlight); }
+    .feature-card.blue { background: var(--accent-muted); }
+    .feature-card.pink { background: var(--accent-pink); }
+
+    .card-num {
+      font-family: var(--font-heading);
+      font-size: var(--card-num-size);
+      font-weight: 700;
+      line-height: 1;
+      color: var(--text-primary);
+      letter-spacing: -0.02em;
+      flex-shrink: 0;
+    }
+
+    .card-text {
+      display: flex;
+      flex-direction: column;
+      gap: 0.2em;
+      min-width: 0;
+    }
+
+    .card-title {
+      font-family: var(--font-heading);
+      font-size: var(--card-title-size);
+      font-weight: 700;
+      color: var(--text-primary);
+      line-height: 1.2;
+    }
+
+    .card-desc {
+      font-family: var(--font-body);
+      font-size: var(--body-size);
+      color: var(--text-secondary);
+      line-height: 1.45;
+    }
+
+    /* Bottom footer */
+    .cover-footer {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: clamp(0.5rem, 1.2vw, 1rem) clamp(0.9rem, 2vw, 1.8rem);
+      border-top: var(--border-thick) solid var(--accent-main);
+      gap: var(--element-gap);
+      background: var(--bg-primary);
+    }
+
+    .footer-note {
+      font-family: var(--font-body);
+      font-size: var(--body-size);
+      color: var(--text-secondary);
+    }
+
+    .ratio-badge {
+      font-family: var(--font-label);
+      font-size: var(--label-size);
+      font-weight: 500;
+      letter-spacing: 0.08em;
+      color: var(--text-secondary);
+      text-transform: uppercase;
+    }
+
+    /* ===========================================
+       ENTRANCE ANIMATIONS
+       =========================================== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(35px);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+
+    .slide.visible .reveal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+
+    .reveal-left {
+      opacity: 0;
+      transform: translateX(-45px);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+
+    .slide.visible .reveal-left {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .reveal-right {
+      opacity: 0;
+      transform: translateX(45px);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+
+    .slide.visible .reveal-right {
+      opacity: 1;
+      transform: translateX(0);
+    }
+
+    .reveal-scale {
+      opacity: 0;
+      transform: scale(0.92);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+
+    .slide.visible .reveal-scale {
+      opacity: 1;
+      transform: scale(1);
+    }
+
+    /* Stagger delays */
+    .delay-1 { transition-delay: 0.08s; }
+    .delay-2 { transition-delay: 0.18s; }
+    .delay-3 { transition-delay: 0.28s; }
+    .delay-4 { transition-delay: 0.38s; }
+    .delay-5 { transition-delay: 0.48s; }
+    .delay-6 { transition-delay: 0.58s; }
+
+    /* ===========================================
+       INLINE EDITING UI
+       =========================================== */
+    .edit-hotzone {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 80px;
+      height: 80px;
+      z-index: 10000;
+      cursor: pointer;
+    }
+
+    .edit-toggle {
+      position: fixed;
+      top: 14px;
+      left: 14px;
+      z-index: 10001;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      font-family: var(--font-label);
+      font-size: 13px;
+      font-weight: 600;
+      padding: 8px 14px;
+      border: 2px solid var(--accent-main);
+      border-radius: 999px;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      cursor: pointer;
+      box-shadow: 3px 3px 0 0 var(--accent-main);
+    }
+
+    .edit-toggle.show,
+    .edit-toggle.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+
+    body.edit-active .editable {
+      outline: 2px dashed var(--accent-main);
+      outline-offset: 3px;
+      cursor: text;
+    }
+
+    body.edit-active .editable:hover {
+      background: rgba(17, 17, 17, 0.04);
+    }
+
+    /* ===========================================
+       RESPONSIVE COVER ADJUSTMENTS
+       =========================================== */
+    @media (max-width: 900px) {
+      .cover-body {
+        grid-template-columns: 1fr;
+        grid-template-rows: auto auto;
+        align-content: center;
+        overflow-y: auto;
+      }
+      .title-area {
+        align-items: flex-start;
+      }
+      .cards-area {
+        flex-direction: row;
+        flex-wrap: wrap;
+      }
+      .feature-card {
+        flex: 1 1 calc(50% - var(--content-gap));
+      }
+    }
+
+    @media (max-width: 600px) {
+      .cover-header {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+      .header-tags {
+        justify-content: flex-start;
+      }
+      .cards-area {
+        flex-direction: column;
+      }
+      .feature-card {
+        flex: 1 1 100%;
+      }
+      .cover-footer {
+        flex-direction: column;
+        align-items: flex-start;
+      }
+    }
+  </style>
+</head>
+<body>
+  <!-- Inline editing hotzone & toggle -->
+  <div class="edit-hotzone" aria-hidden="true"></div>
+  <button class="edit-toggle" id="editToggle" title="按 E 切换编辑模式">✏️ 编辑</button>
+
+  <!-- Single cover slide -->
+  <section class="slide cover-slide" id="slide-1">
+    <div class="cover-frame">
+      <!-- Top header: logo pill + theme tags -->
+      <header class="cover-header">
+        <div class="header-pill editable reveal delay-1">Style Lab</div>
+        <div class="header-tags">
+          <span class="header-tag pink editable reveal delay-2">奶油粗野主义</span>
+          <span class="header-tag yellow editable reveal delay-2">Cream Brutalism</span>
+        </div>
+      </header>
+
+      <!-- Main content: title left, cards right -->
+      <main class="cover-body">
+        <div class="title-area">
+          <div class="guide-label editable reveal-left delay-1">风格预览 / Style Preview</div>
+          <h1 class="en-title editable reveal-left delay-2">Cream<br/>Brutalism</h1>
+          <div class="cn-title-box reveal-scale delay-3">
+            <h2 class="cn-title editable">奶油粗野主义</h2>
+          </div>
+          <p class="subtitle editable reveal-left delay-4">
+            奶白底黑框的粗野主义信息图，糖果色卡片与大号数据，适合趋势解读与知识分享。
+          </p>
+        </div>
+
+        <div class="cards-area">
+          <article class="feature-card green reveal-right delay-3">
+            <span class="card-num editable">01</span>
+            <div class="card-text">
+              <h3 class="card-title editable">粗野主义骨架</h3>
+              <p class="card-desc editable">奶白纸面 + 墨黑粗框，建立强烈的结构骨架与编辑感。</p>
+            </div>
+          </article>
+
+          <article class="feature-card blue reveal-right delay-4">
+            <span class="card-num editable">02</span>
+            <div class="card-text">
+              <h3 class="card-title editable">糖果色卡片</h3>
+              <p class="card-desc editable">薄荷绿、浅蓝、柔粉、柠黄四色承载信息角色，黑字高对比。</p>
+            </div>
+          </article>
+
+          <article class="feature-card pink reveal-right delay-5">
+            <span class="card-num editable">03</span>
+            <div class="card-text">
+              <h3 class="card-title editable">杂志式排版</h3>
+              <p class="card-desc editable">大号数字、药丸标签与错位阴影，拼贴出独立信息图表气质。</p>
+            </div>
+          </article>
+        </div>
+      </main>
+
+      <!-- Bottom footer -->
+      <footer class="cover-footer">
+        <p class="footer-note editable reveal delay-6">奶油色背景 · 黑色粗边框 · 糖果色信息块 · 零外部图片依赖</p>
+        <span class="ratio-badge editable reveal delay-6">横版 · 16:9</span>
+      </footer>
+    </div>
+  </section>
+
+  <script>
+    /* ===========================================
+       SLIDE PRESENTATION CONTROLLER
+       =========================================== */
+    class SlidePresentation {
+      constructor() {
+        this.slides = document.querySelectorAll('.slide');
+        this.totalSlides = this.slides.length;
+        this.currentIndex = 0;
+        this.isScrolling = false;
+
+        this.setupObserver();
+        this.setupKeyboardNav();
+        this.setupTouchNav();
+        this.setupWheelNav();
+        this.updateUI();
+      }
+
+      setupObserver() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              this.currentIndex = Array.from(this.slides).indexOf(entry.target);
+              this.updateUI();
+            }
+          });
+        }, { threshold: 0.3 });
+
+        this.slides.forEach(s => observer.observe(s));
+        // Trigger first slide animation immediately
+        if (this.slides[0]) this.slides[0].classList.add('visible');
+      }
+
+      setupKeyboardNav() {
+        document.addEventListener('keydown', (e) => {
+          if (e.target.isContentEditable) return;
+
+          if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
+            e.preventDefault();
+            this.goTo(this.currentIndex + 1);
+          } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
+            e.preventDefault();
+            this.goTo(this.currentIndex - 1);
+          } else if (e.key === 'Home') {
+            e.preventDefault();
+            this.goTo(0);
+          } else if (e.key === 'End') {
+            e.preventDefault();
+            this.goTo(this.totalSlides - 1);
+          }
+        });
+      }
+
+      setupTouchNav() {
+        let startY = 0;
+        document.addEventListener('touchstart', (e) => {
+          if (e.target.isContentEditable) return;
+          startY = e.touches[0].clientY;
+        }, { passive: true });
+
+        document.addEventListener('touchend', (e) => {
+          if (e.target.isContentEditable) return;
+          const diff = startY - e.changedTouches[0].clientY;
+          if (Math.abs(diff) > 50) {
+            this.goTo(this.currentIndex + (diff > 0 ? 1 : -1));
+          }
+        }, { passive: true });
+      }
+
+      setupWheelNav() {
+        document.addEventListener('wheel', (e) => {
+          if (this.isScrolling) return;
+          this.isScrolling = true;
+          setTimeout(() => { this.isScrolling = false; }, 800);
+          if (e.deltaY > 0) this.goTo(this.currentIndex + 1);
+          else if (e.deltaY < 0) this.goTo(this.currentIndex - 1);
+        }, { passive: true });
+      }
+
+      goTo(index) {
+        if (index < 0 || index >= this.totalSlides) return;
+        this.slides[index].scrollIntoView({ behavior: 'smooth' });
+      }
+
+      updateUI() {
+        // Single slide: no progress bar needed
+      }
+    }
+
+    /* ===========================================
+       INLINE EDITOR
+       =========================================== */
+    class InlineEditor {
+      constructor() {
+        this.isActive = false;
+        this.toggleBtn = document.getElementById('editToggle');
+        this.hotzone = document.querySelector('.edit-hotzone');
+        this.hideTimeout = null;
+
+        this.setupToggle();
+        this.setupHotzone();
+        this.setupKeyboard();
+        this.setupAutoSave();
+      }
+
+      setupToggle() {
+        this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
+        this.hotzone.addEventListener('click', () => this.toggleEditMode());
+      }
+
+      setupHotzone() {
+        const show = () => {
+          clearTimeout(this.hideTimeout);
+          this.toggleBtn.classList.add('show');
+        };
+        const hide = () => {
+          this.hideTimeout = setTimeout(() => {
+            if (!this.isActive) this.toggleBtn.classList.remove('show');
+          }, 400);
+        };
+
+        this.hotzone.addEventListener('mouseenter', show);
+        this.hotzone.addEventListener('mouseleave', hide);
+        this.toggleBtn.addEventListener('mouseenter', show);
+        this.toggleBtn.addEventListener('mouseleave', hide);
+      }
+
+      setupKeyboard() {
+        document.addEventListener('keydown', (e) => {
+          if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
+            this.toggleEditMode();
+          }
+          if (e.ctrlKey && e.key === 's' && this.isActive) {
+            e.preventDefault();
+            this.exportFile();
+          }
+        });
+      }
+
+      toggleEditMode() {
+        this.isActive = !this.isActive;
+        document.body.classList.toggle('edit-active', this.isActive);
+        this.toggleBtn.classList.toggle('active', this.isActive);
+        this.toggleBtn.textContent = this.isActive ? '✓ 完成' : '✏️ 编辑';
+
+        const textElements = document.querySelectorAll(
+          '.editable, h1, h2, h3, p, span'
+        );
+        textElements.forEach(el => {
+          if (this.isActive) {
+            el.setAttribute('contenteditable', 'true');
+          } else {
+            el.removeAttribute('contenteditable');
+          }
+        });
+      }
+
+      setupAutoSave() {
+        const key = 'ppt-' + document.title;
+        const saved = localStorage.getItem(key);
+        if (saved) {
+          try {
+            JSON.parse(saved).forEach(item => {
+              const el = document.querySelector(`[data-edit-id="${item.id}"]`);
+              if (el) el.innerHTML = item.html;
+            });
+          } catch (e) {}
+        }
+
+        document.addEventListener('input', (e) => {
+          if (e.target.isContentEditable) {
+            const editable = document.querySelectorAll('[contenteditable="true"]');
+            const data = Array.from(editable).map(el => {
+              if (!el.dataset.editId) {
+                el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
+              }
+              return { id: el.dataset.editId, html: el.innerHTML };
+            });
+            localStorage.setItem(key, JSON.stringify(data));
+          }
+        });
+      }
+
+      exportFile() {
+        const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
+        editableEls.forEach(el => el.removeAttribute('contenteditable'));
+        document.body.classList.remove('edit-active');
+        this.toggleBtn?.classList.remove('active', 'show');
+
+        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+        document.body.classList.add('edit-active');
+        editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
+        this.toggleBtn?.classList.add('active');
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'cream-brutalism-cover-preview.html';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+    }
+
+    /* Initialize */
+    new SlidePresentation();
+    new InlineEditor();
+  </script>
+</body>
+</html>

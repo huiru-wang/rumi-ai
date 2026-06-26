@@ -1,0 +1,558 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>瑞士国际风 · 封面页模版预览</title>
+
+  <!-- Fonts from China-accessible Google Fonts mirror -->
+  <link rel="preconnect" href="https://fonts.loli.net" />
+  <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@200;300;400;500;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" />
+
+  <style>
+    /* ===========================================
+       SWISS-MODERN THEME VARIABLES
+       严格遵循 swiss-modern.md 色彩与字体规范
+       =========================================== */
+    :root {
+      --bg-primary: #fafaf8;
+      --bg-secondary: #f0f0ee;
+      --text-primary: #0a0a0a;
+      --text-secondary: #525252;
+      --accent-main: #FF6B35;
+      --accent-highlight: #FF8F5C;
+      --accent-muted: rgba(255, 107, 53, 0.18);
+      --surface: #ffffff;
+
+      --font-display: "Noto Sans SC", "Inter", sans-serif;
+      --font-body: "Noto Sans SC", "Inter", sans-serif;
+      --font-mono: "JetBrains Mono", monospace;
+
+      --title-size: clamp(2rem, 6.5vw, 5rem);
+      --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
+      --h3-size: clamp(1rem, 2.5vw, 1.5rem);
+      --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
+      --small-size: clamp(0.65rem, 1vw, 0.875rem);
+      --mega-size: clamp(3rem, 10vw, 8rem);
+
+      --slide-padding: clamp(1.5rem, 5vw, 4rem);
+      --content-gap: clamp(1rem, 2.5vw, 2rem);
+      --element-gap: clamp(0.5rem, 1.2vw, 1rem);
+
+      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
+      --duration-normal: 0.7s;
+    }
+
+    /* ===========================================
+       VIEWPORT FITTING: MANDATORY BASE STYLES
+       完整包含 viewport-base.css 规则
+       =========================================== */
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+
+    html, body {
+      height: 100%;
+      overflow-x: hidden;
+      font-family: var(--font-body);
+      background: var(--accent-main);
+      color: #fff;
+    }
+
+    html {
+      scroll-snap-type: y mandatory;
+      scroll-behavior: smooth;
+    }
+
+    .slide {
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      scroll-snap-align: start;
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+
+    .slide-content {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-height: 100%;
+      overflow: hidden;
+      padding: var(--slide-padding);
+    }
+
+    .card, .container, .content-box {
+      max-width: min(90vw, 1000px);
+      max-height: min(80vh, 700px);
+    }
+
+    img, .image-container {
+      max-width: 100%;
+      max-height: min(50vh, 400px);
+      object-fit: contain;
+    }
+
+    @media (max-height: 700px) {
+      :root {
+        --slide-padding: clamp(0.75rem, 3vw, 2rem);
+        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
+        --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
+        --h2-size: clamp(1rem, 3vw, 1.75rem);
+      }
+    }
+
+    @media (max-height: 600px) {
+      :root {
+        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
+        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
+        --title-size: clamp(1.1rem, 4vw, 2rem);
+        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
+      }
+      .nav-dots, .decorative { display: none; }
+    }
+
+    @media (max-height: 500px) {
+      :root {
+        --slide-padding: clamp(0.4rem, 2vw, 1rem);
+        --title-size: clamp(1rem, 3.5vw, 1.5rem);
+        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
+        --body-size: clamp(0.65rem, 1vw, 0.85rem);
+      }
+    }
+
+    @media (max-width: 600px) {
+      :root { --title-size: clamp(1.25rem, 7vw, 2.5rem); }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after {
+        animation-duration: 0.01ms !important;
+        transition-duration: 0.2s !important;
+      }
+      html { scroll-behavior: auto; }
+    }
+
+    /* ===========================================
+       GLOBAL REVEAL ANIMATIONS
+       页面进入时触发，支持交错延迟
+       =========================================== */
+    .reveal {
+      opacity: 0;
+      transform: translateY(30px);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+    .slide.visible .reveal {
+      opacity: 1;
+      transform: translateY(0);
+    }
+    .reveal:nth-child(1) { transition-delay: 0.08s; }
+    .reveal:nth-child(2) { transition-delay: 0.16s; }
+    .reveal:nth-child(3) { transition-delay: 0.24s; }
+    .reveal:nth-child(4) { transition-delay: 0.32s; }
+    .reveal:nth-child(5) { transition-delay: 0.40s; }
+
+    .reveal-scale {
+      opacity: 0;
+      transform: scale(0.9);
+      transition:
+        opacity var(--duration-normal) var(--ease-out-expo),
+        transform var(--duration-normal) var(--ease-out-expo);
+    }
+    .slide.visible .reveal-scale { opacity: 1; transform: scale(1); }
+
+    /* ===========================================
+       PROGRESS BAR
+       =========================================== */
+    .progress-bar {
+      position: fixed;
+      top: 0;
+      left: 0;
+      height: 3px;
+      background: #fff;
+      width: 100%;
+      z-index: 9999;
+      transition: width 0.3s ease;
+    }
+
+    /* ===========================================
+       ASCII BREATHING FIELD
+       封面标志性元素：低透明度字符呼吸场
+       =========================================== */
+    .ascii-field {
+      position: absolute;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      font-family: var(--font-mono);
+      font-size: clamp(0.65rem, 1.2vw, 1rem);
+      line-height: 1.6;
+      color: rgba(255, 255, 255, 0.08);
+      white-space: pre;
+      user-select: none;
+      z-index: 0;
+    }
+    .ascii-field span {
+      display: inline-block;
+      animation: asciiPulse 4s ease-in-out infinite;
+    }
+    @keyframes asciiPulse {
+      0%, 100% { opacity: 0.04; }
+      50% { opacity: 0.18; }
+    }
+
+    /* ===========================================
+       GRID TEXTURE OVERLAY
+        subtle structural grid on orange background
+       =========================================== */
+    .grid-overlay {
+      position: absolute;
+      inset: 0;
+      pointer-events: none;
+      background-image:
+        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
+      background-size: clamp(40px, 5vw, 80px) clamp(40px, 5vw, 80px);
+      z-index: 1;
+    }
+
+    /* ===========================================
+       COVER SLIDE
+       安全橙满屏 + 中央超大标题 + 页眉页脚
+       =========================================== */
+    .slide-cover {
+      background: var(--accent-main);
+      color: #fff;
+      justify-content: space-between;
+    }
+
+    .slide-header {
+      position: absolute;
+      top: var(--slide-padding);
+      left: var(--slide-padding);
+      right: var(--slide-padding);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-start;
+      z-index: 10;
+      font-family: var(--font-mono);
+      font-size: var(--small-size);
+      text-transform: uppercase;
+      letter-spacing: 0.15em;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .slide-footer {
+      position: absolute;
+      bottom: var(--slide-padding);
+      left: var(--slide-padding);
+      right: var(--slide-padding);
+      display: flex;
+      justify-content: space-between;
+      align-items: flex-end;
+      z-index: 10;
+      font-family: var(--font-mono);
+      font-size: var(--small-size);
+      text-transform: uppercase;
+      letter-spacing: 0.1em;
+      color: rgba(255, 255, 255, 0.7);
+    }
+
+    .cover-main {
+      position: relative;
+      z-index: 5;
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      padding: 0 var(--slide-padding);
+    }
+
+    .cover-title {
+      font-size: clamp(2.5rem, 9vw, 7rem);
+      font-weight: 900;
+      line-height: 1.0;
+      letter-spacing: -0.03em;
+      margin-bottom: var(--content-gap);
+    }
+    .cover-title span {
+      display: block;
+      font-weight: 300;
+      font-size: 0.55em;
+      letter-spacing: 0.02em;
+      margin-top: 0.2em;
+      opacity: 0.9;
+    }
+
+    .cover-tagline {
+      font-family: var(--font-mono);
+      font-size: var(--body-size);
+      letter-spacing: 0.1em;
+      text-transform: uppercase;
+      opacity: 0.8;
+      max-width: min(80vw, 600px);
+    }
+
+    /* ===========================================
+       INLINE EDITING UI
+       默认启用：悬停左上角或按 E 进入编辑
+       =========================================== */
+    .edit-hotzone {
+      position: fixed;
+      top: 0;
+      left: 0;
+      width: 80px;
+      height: 80px;
+      z-index: 10000;
+      cursor: pointer;
+    }
+    .edit-toggle {
+      position: fixed;
+      top: 16px;
+      left: 16px;
+      width: 44px;
+      height: 44px;
+      border-radius: 0;
+      border: 1px solid rgba(255, 255, 255, 0.35);
+      background: rgba(0, 0, 0, 0.2);
+      color: #fff;
+      font-size: 18px;
+      cursor: pointer;
+      opacity: 0;
+      pointer-events: none;
+      transition: opacity 0.3s ease;
+      z-index: 10001;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .edit-toggle.show,
+    .edit-toggle.active {
+      opacity: 1;
+      pointer-events: auto;
+    }
+    body.edit-active .edit-toggle { opacity: 1; pointer-events: auto; }
+    body.edit-active [contenteditable="true"] {
+      outline: 2px dashed rgba(255, 255, 255, 0.8);
+      outline-offset: 4px;
+      cursor: text;
+    }
+
+    /* ===========================================
+       RESPONSIVE ADJUSTMENTS
+       =========================================== */
+    @media (max-width: 900px) {
+      .cover-title { font-size: clamp(2rem, 11vw, 4rem); }
+      .cover-title span { font-size: 0.5em; }
+    }
+
+    @media (max-width: 600px) {
+      .cover-title { font-size: clamp(2rem, 12vw, 3.5rem); }
+      .slide-header,
+      .slide-footer { letter-spacing: 0.08em; }
+    }
+  </style>
+</head>
+<body>
+  <div class="progress-bar" id="progressBar"></div>
+  <div class="edit-hotzone" aria-hidden="true"></div>
+  <button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✏️</button>
+
+  <!-- SLIDE 1: Cover -->
+  <section class="slide slide-cover" data-slide="1">
+    <div class="ascii-field" id="asciiCover"></div>
+    <div class="grid-overlay"></div>
+    <header class="slide-header reveal">
+      <span>Swiss Modern / Template</span>
+      <span>01</span>
+    </header>
+    <main class="cover-main">
+      <h1 class="cover-title reveal">瑞士国际风<span>封面页模版预览</span></h1>
+      <p class="cover-tagline reveal">网格秩序 · 单一焦点 · 理性警示</p>
+    </main>
+    <footer class="slide-footer reveal">
+      <span>企业宣讲 · 安全宣贯</span>
+      <span>Scroll / Arrow / Space</span>
+    </footer>
+  </section>
+
+  <script>
+    /* ===========================================
+       ASCII BREATHING FIELD GENERATOR
+       随机生成几何字符点阵，营造数字化警觉氛围
+       =========================================== */
+    function fillAsciiField(id, chars) {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const width = window.innerWidth;
+      const height = window.innerHeight;
+      const fontSize = parseFloat(getComputedStyle(el).fontSize) || 14;
+      const cols = Math.ceil(width / (fontSize * 0.7));
+      const rows = Math.ceil(height / (fontSize * 1.6));
+      let html = '';
+      for (let r = 0; r < rows; r++) {
+        let line = '';
+        for (let c = 0; c < cols; c++) {
+          const ch = chars[Math.floor(Math.random() * chars.length)];
+          const delay = (Math.random() * 4).toFixed(2);
+          line += `<span style="animation-delay:${delay}s">${ch}</span>`;
+        }
+        html += line + '\n';
+      }
+      el.innerHTML = html;
+    }
+
+    const asciiChars = ['+', '×', '·', '○', '△', '□', '│', '─'];
+    fillAsciiField('asciiCover', asciiChars);
+    window.addEventListener('resize', () => fillAsciiField('asciiCover', asciiChars));
+
+    /* ===========================================
+       SLIDE VISIBILITY CONTROLLER
+       单页封面：进入视口即触发 reveal 动画
+       =========================================== */
+    class SlidePresentation {
+      constructor() {
+        this.slides = document.querySelectorAll('.slide');
+        this.totalSlides = this.slides.length;
+        this.currentIndex = 0;
+        this.progressBar = document.getElementById('progressBar');
+        this.setupObserver();
+        this.updateUI();
+      }
+
+      setupObserver() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach(entry => {
+            if (entry.isIntersecting) {
+              entry.target.classList.add('visible');
+              this.currentIndex = Array.from(this.slides).indexOf(entry.target);
+              this.updateUI();
+            }
+          });
+        }, { threshold: 0.4 });
+        this.slides.forEach(s => observer.observe(s));
+      }
+
+      updateUI() {
+        if (this.progressBar) {
+          this.progressBar.style.width = ((this.currentIndex + 1) / this.totalSlides * 100) + '%';
+        }
+      }
+    }
+
+    /* ===========================================
+       INLINE EDITOR
+       支持悬停左上角或按 E 切换编辑模式
+       =========================================== */
+    class InlineEditor {
+      constructor() {
+        this.isActive = false;
+        this.toggleBtn = document.getElementById('editToggle');
+        this.hotzone = document.querySelector('.edit-hotzone');
+        this.setupToggle();
+        this.setupAutoSave();
+        this.restoreEdits();
+      }
+
+      setupToggle() {
+        this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
+        this.hotzone.addEventListener('click', () => this.toggleEditMode());
+
+        let hideTimeout = null;
+        const showBtn = () => { clearTimeout(hideTimeout); this.toggleBtn.classList.add('show'); };
+        const hideBtn = () => {
+          hideTimeout = setTimeout(() => {
+            if (!this.isActive) this.toggleBtn.classList.remove('show');
+          }, 400);
+        };
+
+        this.hotzone.addEventListener('mouseenter', showBtn);
+        this.hotzone.addEventListener('mouseleave', hideBtn);
+        this.toggleBtn.addEventListener('mouseenter', showBtn);
+        this.toggleBtn.addEventListener('mouseleave', hideBtn);
+
+        document.addEventListener('keydown', (e) => {
+          if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
+            this.toggleEditMode();
+          }
+          if (e.ctrlKey && e.key === 's' && this.isActive) {
+            e.preventDefault();
+            this.exportFile();
+          }
+        });
+      }
+
+      toggleEditMode() {
+        this.isActive = !this.isActive;
+        document.body.classList.toggle('edit-active', this.isActive);
+        this.toggleBtn.classList.toggle('active', this.isActive);
+        this.toggleBtn.textContent = this.isActive ? '✓' : '✏️';
+
+        const textElements = document.querySelectorAll(
+          'h1, h2, h3, p, span'
+        );
+        textElements.forEach(el => {
+          if (this.isActive) {
+            el.setAttribute('contenteditable', 'true');
+          } else {
+            el.removeAttribute('contenteditable');
+          }
+        });
+      }
+
+      exportFile() {
+        const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
+        editableEls.forEach(el => el.removeAttribute('contenteditable'));
+        document.body.classList.remove('edit-active');
+        this.toggleBtn.classList.remove('active', 'show');
+
+        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
+
+        document.body.classList.add('edit-active');
+        editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
+        this.toggleBtn.classList.add('active');
+
+        const blob = new Blob([html], { type: 'text/html' });
+        const a = document.createElement('a');
+        a.href = URL.createObjectURL(blob);
+        a.download = 'swiss-modern-cover-preview.html';
+        a.click();
+        URL.revokeObjectURL(a.href);
+      }
+
+      setupAutoSave() {
+        const key = 'ppt-' + document.title;
+        document.addEventListener('input', (e) => {
+          if (!e.target.isContentEditable) return;
+          const editable = document.querySelectorAll('[contenteditable="true"]');
+          const data = Array.from(editable).map(el => {
+            if (!el.dataset.editId) {
+              el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
+            }
+            return { id: el.dataset.editId, html: el.innerHTML };
+          });
+          localStorage.setItem(key, JSON.stringify(data));
+        });
+      }
+
+      restoreEdits() {
+        const key = 'ppt-' + document.title;
+        const saved = localStorage.getItem(key);
+        if (!saved) return;
+        try {
+          JSON.parse(saved).forEach(item => {
+            const el = document.querySelector(`[data-edit-id="${item.id}"]`);
+            if (el) el.innerHTML = item.html;
+          });
+        } catch (e) {}
+      }
+    }
+
+    new SlidePresentation();
+    new InlineEditor();
+  </script>
+</body>
+</html>
