@@ -8,7 +8,7 @@ from pydantic import BaseModel, Field
 class FormField(BaseModel):
     name: str = Field(description="字段名")
     label: str = Field(description="显示标签")
-    type: str = Field(description="字段类型: select/multiselect")
+    type: str = Field(description="字段类型: text/select/multiselect")
     options: list[str] | None = Field(
         default=None, description="选项列表"
     )
@@ -33,6 +33,7 @@ def clarify_form(title: str, description: str, fields: list[dict], **kwargs) -> 
     表单会在前端渲染为交互式UI，用户填写后结果会返回给你。
 
     字段类型说明：
+    - text：文本输入。用于收集主题、受众、时长等自由文本。
     - select：单选。可设置 recommended 预选推荐项，设置 allow_custom=true 允许用户自定义输入。
     - multiselect：多选。可设置 recommended 预选多个推荐项。
 

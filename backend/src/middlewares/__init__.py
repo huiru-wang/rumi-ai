@@ -3,6 +3,7 @@ import os
 from src.agent.message_history import MessageHistoryCallback, MessageHistoryMiddleware
 from src.app_context import AppContext
 from langchain_openai import ChatOpenAI
+from src.middlewares.agent_error_middleware import AgentErrorMiddleware
 from src.middlewares.context_inject_middleware import ContextInjectMiddleware
 from src.middlewares.logging_middlewares import LoggingMiddleware
 from src.middlewares.model_message_sanitizer import ModelMessageSanitizerMiddleware
@@ -22,6 +23,7 @@ def create_middlewares(
         base_url=os.getenv("SUMMARIZATION_API_BASE"),
     )
     return [
+        AgentErrorMiddleware(),
         ContextInjectMiddleware(ctx.db),
         MessageHistoryMiddleware(message_history_callback),
         ModelMessageSanitizerMiddleware(),

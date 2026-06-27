@@ -152,15 +152,14 @@ export function StylePickerDialog({
                       return (
                         <div
                           key={style.id}
-                          className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all ${
-                            isSelected
-                              ? "border-accent ring-1 ring-accent"
-                              : "border-border hover:border-accent/50"
-                          }`}
+                          className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all ${isSelected
+                            ? "border-accent ring-1 ring-accent"
+                            : "border-border hover:border-accent/50"
+                            }`}
                         >
                           <button
                             onClick={() => onSelect(style.id)}
-                            className="relative block aspect-[16/10] w-full cursor-pointer overflow-hidden bg-muted"
+                            className="relative block aspect-[16/9] w-full cursor-pointer overflow-hidden bg-muted"
                           >
                             <iframe
                               src={`${getPreviewUrl(style)}?thumb=1`}

@@ -104,7 +104,7 @@ export function InterruptBlock() {
     ).map((field) => ({
       name: (field.name as string) || "",
       label: (field.label as string) || "",
-      type: (field.type as "select" | "multiselect") || "select",
+      type: (field.type as "text" | "select" | "multiselect") || "select",
       options: normalizeFieldOptions(field.options),
       recommended: Array.isArray(field.recommended) ? field.recommended as string[] : undefined,
       allow_custom: field.allow_custom === true,

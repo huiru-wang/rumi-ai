@@ -357,13 +357,14 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
   const controlValue = useMemo<StreamControlValue>(() => {
     const streamErrorMsg = stream.error != null ? String(stream.error) : "";
     const isUserCancelled = streamErrorMsg.includes("CancelledError");
+    const friendlyErrorMsg = stream.error != null ? getFriendlyStreamErrorMessage(stream.error) : "";
     return {
       isLoading: stream.isLoading,
       interrupt: stream.interrupt,
       submit: stableSubmit,
       stop: stableStop,
       // CancelledError = 用户主动中断，不视为错误，不传递 error UI
-      error: isUserCancelled ? null : stream.error != null ? new Error(streamErrorMsg) : null,
+      error: isUserCancelled ? null : stream.error != null ? new Error(friendlyErrorMsg) : null,
       loadOlderMessages,
       hasOlderMessages: historyNextCursor !== null,
       isLoadingOlderMessages,
@@ -424,6 +425,42 @@ function isHiddenMessage(message: any): boolean {
   const content = typeof message?.content === "string" ? message.content : "";
   if (content.startsWith("Here is a summary of the conversation to date:")) return true;
   return false;
+}
+
+function getFriendlyStreamErrorMessage(error: unknown): string {
+  const message = error instanceof Error ? error.message : String(error);
+  const lower = message.toLowerCase();
+
+  if (lower.includes("authentication") || lower.includes("api key") || lower.includes("401")) {
+    return "模型服务认证失败，请联系管理员检查 API Key 配置。";
+  }
+
+  if (lower.includes("quota") || lower.includes("billing") || lower.includes("insufficient")) {
+    return "模型服务额度不足，请稍后重试或联系管理员检查额度。";
+  }
+
+  if (lower.includes("rate limit") || lower.includes("429")) {
+    return "模型服务当前请求过于频繁，请稍后再试。";
+  }
+
+  if (lower.includes("timeout") || lower.includes("timed out")) {
+    return "模型响应超时，请稍后重试。";
+  }
+
+  if (
+    lower.includes("failed to fetch") ||
+    lower.includes("network") ||
+    lower.includes("connection") ||
+    lower.includes("econnrefused")
+  ) {
+    return "无法连接对话服务，请确认 LangGraph 服务已启动后重试。";
+  }
+
+  if (lower.includes("404") || lower.includes("not found") || lower.includes("thread")) {
+    return "当前会话已失效，请重新发送消息。";
+  }
+
+  return "对话服务暂时不可用，请稍后再试。";
 }
 
 const SUMMARIZATION_UPDATE_KEYS = new Set([

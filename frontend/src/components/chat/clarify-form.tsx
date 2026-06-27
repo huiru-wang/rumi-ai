@@ -6,7 +6,7 @@ import { Send, Sparkles, X } from "lucide-react";
 interface FormField {
   name: string;
   label: string;
-  type: "select" | "multiselect";
+  type: "select" | "multiselect" | "text";
   options?: string[];
   recommended?: string[];
   allow_custom?: boolean;
@@ -147,6 +147,22 @@ function FormFieldComponent({
   // Use original options order; recommended only affects selection and badge
   const recommended = field.recommended ?? [];
   const options = field.options ?? [];
+
+  if (field.type === "text") {
+    const selectedValue = (value as string) ?? "";
+
+    return (
+      <div>
+        {labelElement}
+        <input
+          value={selectedValue}
+          onChange={(e) => onChange(e.target.value)}
+          className="w-full rounded-lg border border-border bg-muted px-3 py-2 text-xs text-foreground placeholder:text-muted-foreground focus:border-accent focus:outline-none focus:ring-1 focus:ring-accent"
+          placeholder="请输入..."
+        />
+      </div>
+    );
+  }
 
   if (field.type === "select") {
     const selectedValue = (value as string) ?? "";
