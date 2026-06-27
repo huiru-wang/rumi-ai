@@ -25,6 +25,7 @@ dependencies = [
     "langchain-deepseek>=1.1.0",
     "python-pptx>=1.0",
     "Pillow>=10.0",
+    "oss2>=2.19.1",
 ]
 
 [project.optional-dependencies]

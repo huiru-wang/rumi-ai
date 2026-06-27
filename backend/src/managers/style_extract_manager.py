@@ -18,15 +18,7 @@ from src.storage.file_store import FileStore
 
 logger = logging.getLogger(__name__)
 
-# Re-exported for scripts.parse_pptx import
-import sys as _sys
-
-# Allow `from scripts.parse_pptx import parse_pptx_to_markdown` when running from backend/
-_backend_dir = Path(__file__).resolve().parent.parent.parent
-if str(_backend_dir) not in _sys.path:
-    _sys.path.insert(0, str(_backend_dir))
-
-from scripts.parse_pptx import parse_pptx_to_markdown as _parse_pptx_to_markdown  # noqa: E402
+from src.parsers.pptx_parser import parse_pptx_to_markdown as _parse_pptx_to_markdown
 
 
 # ============================================================
