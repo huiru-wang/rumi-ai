@@ -57,6 +57,8 @@ For normal content slides, keep visible breathing room around the main content. 
 
 When using cards or columns, prefer content-sized blocks with balanced spacing. If the slide starts to look like stacked blocks from top to bottom, reduce text, split the slide, or vary the layout.
 
+Decorative headers, footers, tags, and bottom notes must never overlap the main content. On dense slides, remove non-essential decorative text or bottom notes before shrinking content into an unreadable layout.
+
 ### Content Density Limits Per Slide
 
 | Slide Type    | Maximum Content                                           |
