@@ -13,7 +13,7 @@ logger = logging.getLogger(__name__)
 
 
 class ContextInjectMiddleware(AgentMiddleware):
-    """Inject dynamic document context and PPT metadata into the system prompt."""
+    """Inject dynamic document context and workspace task metadata into the system prompt."""
 
     def __init__(self, db: Database, prompt_manager: PromptManager | None = None) -> None:
         self.db = db
@@ -29,7 +29,7 @@ class ContextInjectMiddleware(AgentMiddleware):
         voice_id = request.state.get("voice_id", "")
         current_ppt_task_id = request.state.get("current_ppt_task_id", "")
         doc_summaries = []
-        ppt_tasks_info = []
+        tasks_info = []
 
         if self.db:
             if self.db.connection is None:
@@ -41,11 +41,9 @@ class ContextInjectMiddleware(AgentMiddleware):
                 if d.get("summary")
             ]
 
-            # Query PPT tasks and extract metadata for system prompt injection
-            ppt_tasks = await self.db.list_tasks(workspace_id)
-            for task in ppt_tasks:
-                if task.get("status") != "completed":
-                    continue
+            # Query current tasks and inject them as the latest workspace task facts.
+            tasks = await self.db.list_tasks(workspace_id)
+            for task in tasks:
                 result_data = {}
                 if task.get("result_data"):
                     try:
@@ -84,20 +82,27 @@ class ContextInjectMiddleware(AgentMiddleware):
                     try:
                         style_rec = await self.db.get_ppt_style(result_data["ppt_style"])
                         if not style_rec:
-                            style_rec = await self.db.get_ppt_style_by_name_en(result_data["ppt_style"])
+                            style_rec = await self.db.get_ppt_style_by_name_en(
+                                result_data["ppt_style"]
+                            )
                         if style_rec:
                             ppt_style_name = style_rec.get("name", "")
                     except Exception:
                         pass
 
-                ppt_tasks_info.append({
-                    "id": task["id"],
-                    "title": task.get("title", "未命名"),
-                    "topic": topic,
-                    "summary": summary,
-                    "style": ppt_style_name,
-                    "children": children_text,
-                })
+                tasks_info.append(
+                    {
+                        "id": task["id"],
+                        "type": task.get("type", ""),
+                        "status": task.get("status", ""),
+                        "title": task.get("title", "未命名"),
+                        "topic": topic,
+                        "summary": summary,
+                        "style": ppt_style_name,
+                        "parent": task.get("parent_task_id") or "无",
+                        "children": children_text,
+                    }
+                )
 
         # Build dynamic system prompt
         prompt = self._prompt_manager.get_system_prompt()
@@ -113,7 +118,9 @@ class ContextInjectMiddleware(AgentMiddleware):
                 ws = await self.db.get_workspace(workspace_id)
                 ext_data = (ws.get("ext_data") or {}) if ws else {}
             except Exception:
-                logger.warning("[ContextInjectMiddleware] failed to fetch workspace=%s", workspace_id)
+                logger.warning(
+                    "[ContextInjectMiddleware] failed to fetch workspace=%s", workspace_id
+                )
 
         # Build user preference section (ppt_style + voice)
         pref_lines: list[str] = []
@@ -126,9 +133,13 @@ class ContextInjectMiddleware(AgentMiddleware):
                 style_record = await self.db.get_ppt_style(ppt_style)
                 # Fallback: old data may store name_en instead of id
                 if not style_record:
-                    style_record = await self.db.get_ppt_style_by_name_en(ppt_style, user_id=user_id)
+                    style_record = await self.db.get_ppt_style_by_name_en(
+                        ppt_style, user_id=user_id
+                    )
             except Exception:
-                logger.warning("[ContextInjectMiddleware] failed to look up ppt_style=%s", ppt_style)
+                logger.warning(
+                    "[ContextInjectMiddleware] failed to look up ppt_style=%s", ppt_style
+                )
 
             if style_record:
                 s_name = style_record.get("name", "")
@@ -167,22 +178,30 @@ class ContextInjectMiddleware(AgentMiddleware):
         if pref_lines:
             prompt += f"\n\n## 用户配置偏好\n" + "\n".join(pref_lines)
 
-        if ppt_tasks_info:
+        if tasks_info:
             rows = []
-            for t in ppt_tasks_info:
+            for t in tasks_info:
                 rows.append(
-                    f"| {t['id']} | {t['title']} | {t['topic']} | {t['summary']} | {t.get('style', '')} | {t['children']} |"
+                    f"| {t['id']} | {t['type']} | {t['status']} | {t['title']} | {t['topic']} | {t['summary']} | {t.get('style', '')} | {t['parent']} | {t['children']} |"
                 )
             table = (
-                "| 任务ID | 标题 | 主题 | 摘要 | 风格 | 子任务 |\n"
-                "|--------|------|------|------|------|--------|\n"
+                "| 任务ID | 类型 | 状态 | 标题 | 主题 | 摘要 | 风格 | 父任务 | 子任务 |\n"
+                "|--------|------|------|------|------|------|------|--------|--------|\n"
             ) + "\n".join(rows)
             prompt += (
-                f"\n\n## 当前PPT产出\n"
-                f"以下是当前工作区已生成的 PPT，可用于口播稿生成等后续操作。\n"
-                f"当用户请求生成口播稿但未指定 PPT 时，从此表格中引导用户选择。\n"
+                f"\n\n## 当前任务列表\n"
+                f"以下列表是当前工作区的最新任务数据，也是判断任务是否存在、类型、状态、父子关系的唯一依据。\n"
+                f"必须严格以此列表为准；对话历史中的任务信息不得覆盖此列表。\n"
+                f"当用户请求生成口播稿时，只能从当前任务列表中选择类型为 ppt 且状态为 completed 的任务。\n"
+                f"如果列表中没有符合条件的 PPT，直接说明当前没有可用于生成口播稿的 PPT。\n"
                 f"生成新 PPT 时，必须检查此列表避免标题重复——若主题相同，参考「风格」列在标题后追加括号区分。\n\n"
                 f"{table}"
+            )
+        else:
+            prompt += (
+                f"\n\n## 当前任务列表\n"
+                f"当前工作区没有任何可用任务。\n"
+                f"对话历史中曾出现的任务、PPT、口播稿或任务 ID，均视为当前不存在或已删除。"
             )
 
         logger.info(
@@ -195,6 +214,6 @@ class ContextInjectMiddleware(AgentMiddleware):
             system_prompt={prompt}
             """
         )
-        
+
         request = request.override(system_message=SystemMessage(content=prompt))
         return await handler(request)

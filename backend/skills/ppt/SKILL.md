@@ -49,6 +49,14 @@ These invariants apply to EVERY slide in EVERY presentation:
 
 **When generating, read `viewport-base.css` and include its full contents in every presentation.**
 
+### Layout Balance Rule
+
+Viewport fitting means the slide fits cleanly, not that every content block must expand to fill the slide.
+
+For normal content slides, keep visible breathing room around the main content. Avoid stretching cards, columns, or bullet containers to fill all remaining vertical space unless the slide is intentionally designed as a full-bleed poster, KPI page, chart, or immersive visual layout.
+
+When using cards or columns, prefer content-sized blocks with balanced spacing. If the slide starts to look like stacked blocks from top to bottom, reduce text, split the slide, or vary the layout.
+
 ### Content Density Limits Per Slide
 
 | Slide Type    | Maximum Content                                           |

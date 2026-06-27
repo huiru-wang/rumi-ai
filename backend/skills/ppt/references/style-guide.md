@@ -22,6 +22,12 @@ For mandatory base styles, see [viewport-base.css](../assets/viewport-base.css).
 - **Content images** (screenshots, logos, inline visuals) must use the `.slide-image` class. They are constrained by `max-height: min(50vh, 400px)` from `viewport-base.css`.
 - **Full-bleed slide backgrounds** must use `.bg-image` with `background-image` on a `<div>`. Never implement them as `<img>`, or the `viewport-base.css` image constraint will truncate them to the top half.
 
+## Layout Anti-Pattern
+
+Avoid content slides that read as a wall of oversized blocks. A common cause is combining full-height flex containers with stretched cards or columns.
+
+Use full-height blocks only when they are part of the intended visual concept, such as a poster slide, KPI slide, comparison hero, chart, or full-slide diagram. Otherwise, let cards size to their content and leave intentional whitespace.
+
 ---
 
 ## CSS Gotchas
