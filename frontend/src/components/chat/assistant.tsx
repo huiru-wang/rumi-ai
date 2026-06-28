@@ -40,6 +40,14 @@ interface MessageContextValue {
   messages: any[];
 }
 
+interface OptimisticHumanMessage {
+  id: string;
+  type: "human";
+  content: string;
+  _optimistic: true;
+  pending: true;
+}
+
 const StreamControlContext = React.createContext<StreamControlValue>({
   isLoading: false,
   interrupt: undefined,
@@ -90,6 +98,7 @@ interface AssistantProps {
 export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, onPptTaskIdConsumed, externalCommand, onExternalCommandConsumed, children }: AssistantProps) {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [historyMessages, setHistoryMessages] = useState<any[]>([]);
+  const [optimisticMessages, setOptimisticMessages] = useState<OptimisticHumanMessage[]>([]);
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const summarizedIds = useRef<Set<string>>(new Set());
@@ -272,9 +281,12 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         // 3) Filter against history (inline liveMessages)
         const historyKeys = new Set(historyMessages.map(messageKey));
         const live = stableMessages.filter((m: any) => !historyKeys.has(messageKey(m)));
+        const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, stableMessages);
 
-        // 4) Merge history + live
-        const merged = mergeMessages(historyMessages, live);
+        // 4) Merge history + live + optimistic. Optimistic messages must be
+        // appended after live stream messages because neither has a database
+        // _rowId yet, and stable sorting preserves insertion order for them.
+        const merged = mergeMessages(mergeMessages(historyMessages, live), optimistic);
 
         // 5) Skip update if content is identical (avoids redundant render)
         setDisplayMessages((prev) => {
@@ -310,7 +322,8 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       const visible = sm.filter((m: any) => !isHiddenMessage(m));
       const historyKeys = new Set(historyMessages.map(messageKey));
       const live = visible.filter((m: any) => !historyKeys.has(messageKey(m)));
-      setDisplayMessages(mergeMessages(historyMessages, live));
+      const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, visible);
+      setDisplayMessages(mergeMessages(mergeMessages(historyMessages, live), optimistic));
     }
 
     return () => {
@@ -320,7 +333,15 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream.messages.length, stream.isLoading, historyMessages]);
+  }, [stream.messages.length, stream.isLoading, historyMessages, optimisticMessages]);
+
+  useEffect(() => {
+    setOptimisticMessages((current) => {
+      const next = filterConfirmedOptimisticMessages(current, stream.messages);
+      return next.length === current.length ? current : next;
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stream.messages.length]);
 
   // ─── Stable submit / stop callbacks (prevent context value churn) ─────
   const streamRef = useRef(stream);
@@ -330,18 +351,27 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
 
   const stableSubmit = useCallback((content: string) => {
     const s = submitStateRef.current;
-    streamRef.current.submit(
-      {
-        messages: [{ type: "human", content }],
-        workspace_id: s.workspaceId,
-        ppt_style: s.pptStyle || "",
-        voice_id: s.voiceId || "",
-        current_ppt_task_id: s.currentPptTaskId || "",
-      },
-      { config: { recursion_limit: 30 } },
-    );
-    if (s.currentPptTaskId) {
-      s.onPptTaskIdConsumed?.();
+    const optimisticMessage = createOptimisticHumanMessage(content);
+    setOptimisticMessages((current) => [...current, optimisticMessage]);
+    try {
+      streamRef.current.submit(
+        {
+          messages: [{ type: "human", content }],
+          workspace_id: s.workspaceId,
+          ppt_style: s.pptStyle || "",
+          voice_id: s.voiceId || "",
+          current_ppt_task_id: s.currentPptTaskId || "",
+        },
+        { config: { recursion_limit: 30 } },
+      );
+      if (s.currentPptTaskId) {
+        s.onPptTaskIdConsumed?.();
+      }
+    } catch (error) {
+      setOptimisticMessages((current) =>
+        current.filter((message) => message.id !== optimisticMessage.id),
+      );
+      throw error;
     }
   }, []);
 
@@ -425,6 +455,37 @@ function isHiddenMessage(message: any): boolean {
   const content = typeof message?.content === "string" ? message.content : "";
   if (content.startsWith("Here is a summary of the conversation to date:")) return true;
   return false;
+}
+
+function createOptimisticHumanMessage(content: string): OptimisticHumanMessage {
+  return {
+    id: `optimistic-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+    type: "human",
+    content,
+    _optimistic: true,
+    pending: true,
+  };
+}
+
+function filterConfirmedOptimisticMessages(
+  optimisticMessages: OptimisticHumanMessage[],
+  streamMessages: any[],
+) {
+  if (optimisticMessages.length === 0) return optimisticMessages;
+  const confirmedCounts = new Map<string, number>();
+  for (const message of streamMessages) {
+    if ((message?._getType?.() || message?.type || message?.role) !== "human") continue;
+    if (typeof message?.content !== "string" || !message.content) continue;
+    confirmedCounts.set(message.content, (confirmedCounts.get(message.content) ?? 0) + 1);
+  }
+  if (confirmedCounts.size === 0) return optimisticMessages;
+
+  return optimisticMessages.filter((message) => {
+    const confirmedCount = confirmedCounts.get(message.content) ?? 0;
+    if (confirmedCount <= 0) return true;
+    confirmedCounts.set(message.content, confirmedCount - 1);
+    return false;
+  });
 }
 
 function getFriendlyStreamErrorMessage(error: unknown): string {

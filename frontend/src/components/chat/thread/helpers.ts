@@ -133,7 +133,7 @@ export function isNearBottom(element: HTMLElement): boolean {
 // ============================================================
 
 export function groupMessagesIntoTurns(messages: any[]) {
-  const turns: Array<{ type: "human"; text: string; id: string } | { type: "ai-turn"; turn: AITurn }> = [];
+  const turns: Array<{ type: "human"; text: string; id: string; pending?: boolean } | { type: "ai-turn"; turn: AITurn }> = [];
   let currentTurn: AITurn | null = null;
 
   for (const msg of messages) {
@@ -148,6 +148,7 @@ export function groupMessagesIntoTurns(messages: any[]) {
         type: "human",
         text: typeof msg.content === "string" ? msg.content : "",
         id: msg.id ?? `human-${turns.length}`,
+        pending: !!msg.pending,
       });
     } else if (msgType === "ai") {
       if (!currentTurn) {

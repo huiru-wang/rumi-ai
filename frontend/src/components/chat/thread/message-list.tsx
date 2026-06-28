@@ -15,7 +15,7 @@ export function MessageList({ messages }: { messages: any[] }) {
     <>
       {turns.map((entry) => {
         if (entry.type === "human") {
-          return <HumanBubble key={entry.id} text={entry.text} />;
+          return <HumanBubble key={entry.id} text={entry.text} pending={entry.pending} />;
         }
         return <AITurnBubble key={entry.turn.id} turn={entry.turn} />;
       })}
