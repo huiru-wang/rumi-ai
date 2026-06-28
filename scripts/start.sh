@@ -121,10 +121,14 @@ if [ -z "$FRONTEND_RUNNER" ]; then
   fail "Missing frontend package manager: install pnpm or npm."
 fi
 
-if [ ! -d "$FRONTEND/node_modules" ]; then
+if [ ! -x "$FRONTEND/node_modules/.bin/next" ]; then
   log "安装前端依赖..."
   cd "$FRONTEND"
-  "$FRONTEND_RUNNER" install
+  if [ "$FRONTEND_RUNNER" = "pnpm" ]; then
+    "$FRONTEND_RUNNER" install --frozen-lockfile
+  else
+    "$FRONTEND_RUNNER" install
+  fi
   cd "$ROOT"
 fi
 
