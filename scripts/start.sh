@@ -75,6 +75,10 @@ if [ "$ENV_NAME" = "prod" ]; then
     fail "缺少 backend/.env.production；请复制 backend/.env.production.example 并填入生产配置"
   fi
   load_env_file "$BACKEND/.env.production"
+  if [ -z "${OPENAI_API_KEY:-}" ]; then
+    fail "backend/.env.production 缺少 OPENAI_API_KEY，LangGraph 无法加载 Agent"
+  fi
+  cp "$BACKEND/.env.production" "$BACKEND/.env"
 else
   if [ ! -f "$BACKEND/.env" ]; then
     log "复制 backend/.env.example → backend/.env（请编辑填入 API Key）"
@@ -196,8 +200,13 @@ if [ -f "$HOME/.nvm/nvm.sh" ]; then
 fi
 
 if [ "$ENV_NAME" = "prod" ]; then
-  nohup "$FRONTEND_RUNNER" run start -- -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
-    > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  if [ "$FRONTEND_RUNNER" = "pnpm" ]; then
+    nohup "$FRONTEND_RUNNER" exec next start -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
+      > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  else
+    nohup npx next start -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
+      > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  fi
 else
   nohup "$FRONTEND_RUNNER" run dev -- -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
     > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &

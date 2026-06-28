@@ -199,6 +199,8 @@ cp backend/.env.production.example backend/.env.production
 ./scripts/start.sh prod
 ```
 
+生产启动时脚本会把 `backend/.env.production` 同步到 `backend/.env`，这是因为 LangGraph 配置文件当前固定从 `.env` 加载运行时环境变量。
+
 生产环境前端公开配置模板在 `frontend/.env.production.example`，`./scripts/start.sh prod` 会从 `scripts/config/prod.env` 注入同样的公开变量：
 
 ```env
