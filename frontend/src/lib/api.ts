@@ -229,6 +229,29 @@ export function saveTaskFile(
   });
 }
 
+export interface TaskShareInfo {
+  enabled: boolean;
+  token: string | null;
+  url: string | null;
+  type: string | null;
+}
+
+export function getTaskShare(taskId: string): Promise<TaskShareInfo> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}/share`);
+}
+
+export function createTaskShare(taskId: string): Promise<TaskShareInfo> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}/share`, {
+    method: "POST",
+  });
+}
+
+export function deleteTaskShare(taskId: string): Promise<{ ok: boolean; revoked: number }> {
+  return request(`/api/tasks/${encodeURIComponent(taskId)}/share`, {
+    method: "DELETE",
+  });
+}
+
 // --- PPT Styles ---
 
 export interface PptStyleInfo {
@@ -332,6 +355,32 @@ export function getPptStylePreviewUrl(styleId: string, thumb = false): string {
 export function getStyleExtractionPreviewUrl(taskId: string, thumb = false): string {
   const qs = thumb ? `?thumb=1` : "";
   return `${API_BASE}/api/tasks/${encodeURIComponent(taskId)}/style-preview${qs}`;
+}
+
+export interface ShareSlide {
+  number: number;
+  title?: string;
+  text?: string;
+  has_audio: boolean;
+  audio_url?: string;
+}
+
+export interface ShareDetail {
+  type: "ppt" | "narration";
+  title: string;
+  ppt: {
+    title: string;
+    html_url: string;
+  };
+  narration?: {
+    title: string;
+    voice_name: string;
+    slides: ShareSlide[];
+  };
+}
+
+export function getShareDetail(token: string): Promise<ShareDetail> {
+  return request(`/api/shares/${encodeURIComponent(token)}`);
 }
 
 /**

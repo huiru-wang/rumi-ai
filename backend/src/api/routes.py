@@ -42,7 +42,13 @@ from src.limits import (
 )
 from src.managers.doc_manager import DuplicateDocumentError
 from src.storage.seeds import _BUILTIN_VOICES
-from src.url_utils import build_style_extraction_resource_url, build_style_resource_url
+from src.url_utils import (
+    build_share_audio_url,
+    build_share_ppt_url,
+    build_share_url,
+    build_style_extraction_resource_url,
+    build_style_resource_url,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -351,6 +357,7 @@ async def delete_task(workspace_id: str, task_id: str):
         raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
 
     deleted_ids = await db.delete_task(task_id)
+    revoked_count = await db.revoke_shares_for_tasks(deleted_ids, reason="task_deleted")
 
     # --- File cleanup (delegated to FileStore for local/OSS transparency) ---
     if task["type"] == "ppt":
@@ -375,7 +382,7 @@ async def delete_task(workspace_id: str, task_id: str):
         await file_store.delete_style_task_dir(workspace_id, task_id)
         logger.info("[API] removed style extraction output directory for task: %s", task_id)
 
-    return success_response({"deleted_ids": deleted_ids})
+    return success_response({"deleted_ids": deleted_ids, "revoked_shares": revoked_count})
 
 
 @app.put("/api/workspaces/{workspace_id}/tasks/{task_id}/file")
@@ -399,6 +406,79 @@ async def save_task_file(workspace_id: str, task_id: str, req: SaveTaskFileReque
     await file_store.write_text(file_path, req.content)
     logger.info("[API] saved task file: %s (%d bytes)", file_path, len(req.content))
     return success_response(None)
+
+
+def _share_payload(share: dict | None) -> dict:
+    if not share:
+        return {"enabled": False, "token": None, "url": None, "type": None}
+    token = share["token"]
+    return {
+        "enabled": True,
+        "token": token,
+        "url": build_share_url(token),
+        "type": share.get("type"),
+    }
+
+
+async def _validate_shareable_task(task_id: str) -> dict:
+    task = await db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if task.get("type") not in {"ppt", "narration"}:
+        raise HTTPException(status_code=400, detail="Task is not shareable")
+    if task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Task is not completed")
+
+    result_data = _parse_json_object(task.get("result_data"))
+    if task["type"] == "ppt":
+        if not result_data.get("file_path"):
+            raise HTTPException(status_code=404, detail="PPT file not found")
+    else:
+        parent_task_id = task.get("parent_task_id")
+        if not parent_task_id:
+            raise HTTPException(status_code=404, detail="Parent PPT not found")
+        parent_task = await db.get_task(parent_task_id)
+        parent_result = _parse_json_object(parent_task.get("result_data") if parent_task else None)
+        if not parent_task or parent_task.get("status") != "completed" or not parent_result.get("file_path"):
+            raise HTTPException(status_code=404, detail="Parent PPT not found")
+        has_audio = any(
+            isinstance(slide, dict) and bool(slide.get("audio_path"))
+            for slide in result_data.get("slides", [])
+        )
+        if not has_audio:
+            raise HTTPException(status_code=404, detail="Narration audio not found")
+    return task
+
+
+@app.get("/api/tasks/{task_id}/share")
+async def get_task_share(task_id: str):
+    """Get current active share status for a task."""
+    logger.info("[API] GET /api/tasks/%s/share", task_id)
+    task = await db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    share = await db.get_active_share_by_task(task_id)
+    return success_response(_share_payload(share))
+
+
+@app.post("/api/tasks/{task_id}/share")
+async def create_task_share(task_id: str):
+    """Create or reuse an active share link for a completed PPT/narration task."""
+    logger.info("[API] POST /api/tasks/%s/share", task_id)
+    task = await _validate_shareable_task(task_id)
+    share = await db.create_or_get_active_share(task)
+    return success_response(_share_payload(share))
+
+
+@app.delete("/api/tasks/{task_id}/share")
+async def delete_task_share(task_id: str):
+    """Revoke the active share link for a task."""
+    logger.info("[API] DELETE /api/tasks/%s/share", task_id)
+    task = await db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    revoked = await db.revoke_share_for_task(task_id, reason="user_revoked")
+    return success_response({"ok": True, "revoked": revoked})
 
 
 # --- Style Extraction ---
@@ -698,6 +778,102 @@ async def _get_completed_task(task_id: str, expected_type: str | None = None) ->
     if task.get("status") != "completed":
         raise HTTPException(status_code=400, detail="Task is not completed")
     return task
+
+
+async def _get_active_share_context(token: str) -> tuple[dict, dict, dict | None]:
+    share = await db.get_active_share_by_token(token)
+    if not share:
+        raise HTTPException(status_code=404, detail="Share not found")
+    task = await db.get_task(share["task_id"])
+    if not task or task.get("status") != "completed":
+        raise HTTPException(status_code=404, detail="Share not found")
+    if task.get("type") == "narration":
+        parent_task = await db.get_task(task.get("parent_task_id", ""))
+        if not parent_task or parent_task.get("status") != "completed":
+            raise HTTPException(status_code=404, detail="Share not found")
+        return share, task, parent_task
+    return share, task, None
+
+
+def _share_detail_payload(token: str, task: dict, parent_task: dict | None = None) -> dict:
+    if task.get("type") == "ppt":
+        return {
+            "type": "ppt",
+            "title": task.get("title") or "PPT",
+            "ppt": {
+                "title": task.get("title") or "PPT",
+                "html_url": build_share_ppt_url(token),
+            },
+        }
+
+    result_data = _parse_json_object(task.get("result_data"))
+    slides = []
+    for slide in result_data.get("slides", []):
+        if not isinstance(slide, dict):
+            continue
+        number = slide.get("number")
+        has_audio = bool(slide.get("audio_path"))
+        safe_slide = {
+            key: slide[key]
+            for key in ("number", "title", "text")
+            if key in slide
+        }
+        safe_slide["has_audio"] = has_audio
+        if has_audio and isinstance(number, int):
+            safe_slide["audio_url"] = build_share_audio_url(token, number)
+        slides.append(safe_slide)
+
+    ppt_task = parent_task or {}
+    return {
+        "type": "narration",
+        "title": task.get("title") or "口播稿",
+        "ppt": {
+            "title": ppt_task.get("title") or "PPT",
+            "html_url": build_share_ppt_url(token),
+        },
+        "narration": {
+            "title": task.get("title") or "口播稿",
+            "voice_name": result_data.get("voice_name", ""),
+            "slides": slides,
+        },
+    }
+
+
+@app.get("/api/shares/{token}")
+async def get_share_detail(token: str):
+    """Public share metadata without exposing storage paths."""
+    logger.info("[API] GET /api/shares/%s", token)
+    _, task, parent_task = await _get_active_share_context(token)
+    return success_response(_share_detail_payload(token, task, parent_task))
+
+
+@app.get("/api/shares/{token}/ppt")
+async def preview_share_ppt(token: str):
+    """Public readonly PPT HTML for a share link."""
+    logger.info("[API] GET /api/shares/%s/ppt", token)
+    _, task, parent_task = await _get_active_share_context(token)
+    ppt_task = parent_task if task.get("type") == "narration" else task
+    file_path = _get_task_file_path(ppt_task)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="PPT file not found")
+    return await _serve_file(file_path, disposition="inline")
+
+
+@app.get("/api/shares/{token}/audio/{slide_number}")
+async def preview_share_audio(token: str, slide_number: int):
+    """Public narration audio for a share link."""
+    logger.info("[API] GET /api/shares/%s/audio/%s", token, slide_number)
+    _, task, _ = await _get_active_share_context(token)
+    if task.get("type") != "narration":
+        raise HTTPException(status_code=404, detail="Audio not found")
+    result_data = _parse_json_object(task.get("result_data"))
+    for slide in result_data.get("slides", []):
+        if isinstance(slide, dict) and slide.get("number") == slide_number:
+            audio_path = slide.get("audio_path")
+            if audio_path:
+                return await _serve_file(audio_path, disposition="inline")
+            break
+    raise HTTPException(status_code=404, detail="Audio not found")
 
 
 @app.get("/api/tasks/{task_id}/preview")

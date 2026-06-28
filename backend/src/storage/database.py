@@ -1,4 +1,5 @@
 import random
+import secrets
 import uuid
 from datetime import datetime
 import json
@@ -85,7 +86,18 @@ class Database:
                 preview_path TEXT DEFAULT '',
                 created_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
+            CREATE TABLE IF NOT EXISTS share_link (
+                token TEXT PRIMARY KEY,
+                task_id TEXT NOT NULL,
+                workspace_id TEXT NOT NULL,
+                type TEXT NOT NULL,
+                created_at TEXT DEFAULT (datetime('now', 'localtime')),
+                revoked_at TEXT,
+                revoked_reason TEXT
+            );
             CREATE INDEX IF NOT EXISTS idx_ppt_style_user ON ppt_style(user_id);
+            CREATE INDEX IF NOT EXISTS idx_share_link_task_active
+                ON share_link(task_id, revoked_at);
             CREATE INDEX IF NOT EXISTS idx_message_thread_id_id
                 ON message(thread_id, id DESC);
             PRAGMA foreign_keys = ON;
@@ -193,6 +205,17 @@ class Database:
         if "resource_manifest" not in ppt_style_columns:
             await self.connection.execute(
                 "ALTER TABLE ppt_style ADD COLUMN resource_manifest TEXT DEFAULT '[]'"
+            )
+
+        cursor = await self.connection.execute("PRAGMA table_info(share_link)")
+        share_columns = {row["name"] for row in await cursor.fetchall()}
+        if share_columns:
+            if "revoked_reason" not in share_columns:
+                await self.connection.execute(
+                    "ALTER TABLE share_link ADD COLUMN revoked_reason TEXT"
+                )
+            await self.connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_share_link_task_active ON share_link(task_id, revoked_at)"
             )
 
         # Clear old system styles and re-seed
@@ -761,6 +784,73 @@ class Database:
         await self.connection.execute("DELETE FROM task WHERE id = ?", (task_id,))
         await self.connection.commit()
         return deleted_ids
+
+    # --- Share Links ---
+
+    async def create_or_get_active_share(self, task: dict) -> dict:
+        """Create a share link or return the active one for a task."""
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT * FROM share_link WHERE task_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            (task["id"],),
+        )
+        row = await cursor.fetchone()
+        if row:
+            return dict(row)
+
+        token = secrets.token_urlsafe(32)
+        await self.connection.execute(
+            "INSERT INTO share_link (token, task_id, workspace_id, type) VALUES (?, ?, ?, ?)",
+            (token, task["id"], task["workspace_id"], task["type"]),
+        )
+        await self.connection.commit()
+        cursor = await self.connection.execute(
+            "SELECT * FROM share_link WHERE token = ?",
+            (token,),
+        )
+        row = await cursor.fetchone()
+        return dict(row)
+
+    async def get_active_share_by_task(self, task_id: str) -> dict | None:
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT * FROM share_link WHERE task_id = ? AND revoked_at IS NULL ORDER BY created_at DESC LIMIT 1",
+            (task_id,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def get_active_share_by_token(self, token: str) -> dict | None:
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT * FROM share_link WHERE token = ? AND revoked_at IS NULL",
+            (token,),
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def revoke_share_for_task(self, task_id: str, reason: str = "user_revoked") -> int:
+        await self.ensure_initialized()
+        now = datetime.now().isoformat()
+        cursor = await self.connection.execute(
+            "UPDATE share_link SET revoked_at = ?, revoked_reason = ? WHERE task_id = ? AND revoked_at IS NULL",
+            (now, reason, task_id),
+        )
+        await self.connection.commit()
+        return cursor.rowcount
+
+    async def revoke_shares_for_tasks(self, task_ids: list[str], reason: str = "task_deleted") -> int:
+        await self.ensure_initialized()
+        if not task_ids:
+            return 0
+        placeholders = ",".join("?" * len(task_ids))
+        now = datetime.now().isoformat()
+        cursor = await self.connection.execute(
+            f"UPDATE share_link SET revoked_at = ?, revoked_reason = ? WHERE task_id IN ({placeholders}) AND revoked_at IS NULL",
+            [now, reason, *task_ids],
+        )
+        await self.connection.commit()
+        return cursor.rowcount
 
     # --- PPT Style ---
 

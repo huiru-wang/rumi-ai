@@ -13,12 +13,27 @@ import {
   Trash2,
   AlertCircle,
   ChevronRight,
+  Clipboard,
+  Link2,
   Play,
   Eye,
   Palette,
   Ban,
+  Share2,
+  X,
 } from "lucide-react";
-import { listTasks, deleteTask, downloadTaskFile, type Task, type PptStyleInfo, type VoiceInfo } from "@/lib/api";
+import {
+  createTaskShare,
+  deleteTask,
+  deleteTaskShare,
+  downloadTaskFile,
+  getTaskShare,
+  listTasks,
+  type PptStyleInfo,
+  type Task,
+  type TaskShareInfo,
+  type VoiceInfo,
+} from "@/lib/api";
 
 function getTaskResultData(task: Task): Record<string, any> | null {
   if (!task.result_data) return null;
@@ -234,6 +249,7 @@ interface TaskItemProps {
 function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onPlayNarration, onPreview, onViewStyleExtraction, parentTask, canExpand, expanded, onToggleExpand }: TaskItemProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [confirmDelete, setConfirmDelete] = useState(false);
+  const [shareOpen, setShareOpen] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
 
   const typeConfig = TYPE_CONFIG[task.type] ?? {
@@ -264,6 +280,7 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
 
   const isPptCompleted = task.type === "ppt" && task.status === "completed";
   const hasDownload = isPptCompleted;
+  const canShare = task.status === "completed" && (task.type === "ppt" || task.type === "narration");
   const canPlay = task.type === "narration" && task.status === "completed" && !!onPlayNarration && !!parentTask;
   const canPreview = task.type === "ppt" && task.status === "completed" && !!onPreview;
   const canViewStyleExtraction = task.type === "ppt_style_extraction" && !!onViewStyleExtraction;
@@ -411,6 +428,15 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
                   下载
                 </button>
               )}
+              {canShare && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); setMenuOpen(false); setShareOpen(true); }}
+                  className="flex w-full items-center gap-2 px-3 py-1.5 text-xs text-foreground hover:bg-muted/50"
+                >
+                  <Share2 size={12} />
+                  分享
+                </button>
+              )}
               {isPptCompleted && onNarrate && (
                 <button
                   onClick={(e) => { e.stopPropagation(); handleNarrate(); }}
@@ -432,6 +458,13 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
         </div>
       </div>
 
+      {shareOpen && (
+        <ShareTaskDialog
+          task={task}
+          onClose={() => setShareOpen(false)}
+        />
+      )}
+
       {/* Delete confirmation dialog */}
       {confirmDelete && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
@@ -441,8 +474,10 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
             </h3>
             <p className="mt-2 text-xs text-muted-foreground">
               {task.type === "ppt"
-                ? `将同时删除该PPT关联的口播稿和音频文件，此操作不可撤销。`
-                : `将删除「${task.title ?? typeConfig.label}」及其文件，此操作不可撤销。`}
+                ? `将同时删除该PPT关联的口播稿和音频文件。若该PPT或关联口播稿已分享，对应分享链接也会立即失效。此操作不可撤销。`
+                : task.type === "narration"
+                  ? `将删除「${task.title ?? typeConfig.label}」及其音频文件。若已分享，对应分享链接也会立即失效。此操作不可撤销。`
+                  : `将删除「${task.title ?? typeConfig.label}」及其文件，此操作不可撤销。`}
             </p>
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -462,5 +497,173 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
         </div>
       )}
     </>
+  );
+}
+
+function ShareTaskDialog({ task, onClose }: { task: Task; onClose: () => void }) {
+  const [share, setShare] = useState<TaskShareInfo | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [busy, setBusy] = useState(false);
+  const [copied, setCopied] = useState(false);
+  const [confirmCancel, setConfirmCancel] = useState(false);
+  const [error, setError] = useState("");
+
+  const loadShare = useCallback(async () => {
+    setLoading(true);
+    setError("");
+    try {
+      setShare(await getTaskShare(task.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "加载分享状态失败");
+    } finally {
+      setLoading(false);
+    }
+  }, [task.id]);
+
+  useEffect(() => {
+    loadShare();
+  }, [loadShare]);
+
+  const handleCreate = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      setShare(await createTaskShare(task.id));
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "生成分享链接失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const handleCopy = async () => {
+    if (!share?.url) return;
+    try {
+      await navigator.clipboard.writeText(share.url);
+      setCopied(true);
+      setTimeout(() => setCopied(false), 1800);
+    } catch {
+      setError("复制失败，请手动复制链接");
+    }
+  };
+
+  const handleCancelShare = async () => {
+    setBusy(true);
+    setError("");
+    try {
+      await deleteTaskShare(task.id);
+      setShare({ enabled: false, token: null, url: null, type: null });
+      setConfirmCancel(false);
+      setCopied(false);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "取消分享失败");
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const title = task.type === "narration" ? "分享播放页面" : "分享 PPT";
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+      <div className="mx-4 w-full max-w-md rounded-xl border border-border bg-background p-5 shadow-2xl">
+        <div className="flex items-start justify-between gap-3">
+          <div>
+            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              {share?.enabled
+                ? "任何获得链接的人都可以查看。"
+                : "开启分享后，任何获得链接的人都可以查看。"}
+            </p>
+          </div>
+          <button
+            onClick={onClose}
+            className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
+          >
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="mt-4">
+          {loading ? (
+            <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-3 text-xs text-muted-foreground">
+              <Loader2 size={14} className="animate-spin" />
+              加载分享状态...
+            </div>
+          ) : share?.enabled && share.url ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-3 py-2">
+                <Link2 size={14} className="shrink-0 text-muted-foreground" />
+                <input
+                  readOnly
+                  value={share.url}
+                  className="min-w-0 flex-1 bg-transparent text-xs text-foreground outline-none"
+                />
+              </div>
+              <div className="flex justify-end gap-2">
+                {confirmCancel ? (
+                  <>
+                    <button
+                      onClick={() => setConfirmCancel(false)}
+                      disabled={busy}
+                      className="rounded-lg px-3 py-1.5 text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+                    >
+                      保留
+                    </button>
+                    <button
+                      onClick={handleCancelShare}
+                      disabled={busy}
+                      className="rounded-lg bg-red-500/20 px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/30 disabled:opacity-50"
+                    >
+                      {busy ? "取消中..." : "确认取消"}
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    <button
+                      onClick={() => setConfirmCancel(true)}
+                      disabled={busy}
+                      className="rounded-lg px-3 py-1.5 text-xs text-red-400 hover:bg-red-500/15 disabled:opacity-50"
+                    >
+                      取消分享
+                    </button>
+                    <button
+                      onClick={handleCopy}
+                      disabled={busy}
+                      className="flex items-center gap-1.5 rounded-lg bg-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-accent/30 disabled:opacity-50"
+                    >
+                      <Clipboard size={13} />
+                      {copied ? "已复制" : "复制链接"}
+                    </button>
+                  </>
+                )}
+              </div>
+              {confirmCancel && (
+                <p className="text-xs text-muted-foreground">
+                  取消后，当前分享链接将立即失效。
+                </p>
+              )}
+            </div>
+          ) : (
+            <div className="flex justify-end">
+              <button
+                onClick={handleCreate}
+                disabled={busy}
+                className="flex items-center gap-1.5 rounded-lg bg-accent/20 px-3 py-1.5 text-xs text-accent hover:bg-accent/30 disabled:opacity-50"
+              >
+                {busy ? <Loader2 size={13} className="animate-spin" /> : <Share2 size={13} />}
+                生成分享链接
+              </button>
+            </div>
+          )}
+        </div>
+
+        {error && (
+          <p className="mt-3 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-400">
+            {error}
+          </p>
+        )}
+      </div>
+    </div>
   );
 }

@@ -52,6 +52,7 @@ RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档
 | `OPENAI_API_BASE` | DeepSeek API 地址 | 默认 `https://api.deepseek.com` |
 | `MAIN_MODEL` | Agent 主模型 | 默认 `deepseek-v4-flash` |
 | `PUBLIC_API_BASE` | 对外可访问的 FastAPI 地址，用于生成 PPT 图片资源代理 URL | 默认 `http://localhost:8000` |
+| `PUBLIC_WEB_BASE` | 对外可访问的前端地址，用于生成分享链接 | 默认 `http://localhost:3000` |
 | `EMBEDDING_API_KEY` | 向量 Embedding（Dashscope） | **必须** |
 | `EMBEDDING_API_BASE` | Embedding API 地址 | 默认 Dashscope |
 | `EMBEDDING_MODEL` | Embedding 模型 | 默认 `text-embedding-v2` |
