@@ -59,6 +59,18 @@ When using cards or columns, prefer content-sized blocks with balanced spacing. 
 
 Decorative headers, footers, tags, and bottom notes must never overlap the main content. On dense slides, remove non-essential decorative text or bottom notes before shrinking content into an unreadable layout.
 
+### Content-Driven Layout Choice
+
+Let the content shape choose the layout. Cards work well for categories, comparisons, and independent points; diagrams, flows, timelines, maps, or state branches often explain mechanisms, processes, relationships, dependencies, and lifecycle changes better.
+
+Match visual weight to information density. A large visual block should carry enough structure, insight, or hierarchy to justify its size. If a point is short, use a smaller module, inline annotation, or combine it into a richer visual structure.
+
+Technical slides should add explanatory value beyond definitions. Prefer including one or two of: mechanism, boundary condition, cause/effect, concrete example, contrast, common pitfall, or decision rule.
+
+Avoid repeating the same meaning across decorative tags, headings, and card titles. Each visible element should either orient, explain, compare, or emphasize.
+
+These are judgment guidelines, not fixed templates. Use large cards, grids, bars, or minimal layouts when the content genuinely benefits from them.
+
 ### Content Density Limits Per Slide
 
 | Slide Type    | Maximum Content                                           |

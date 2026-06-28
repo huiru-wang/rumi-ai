@@ -208,8 +208,13 @@ if [ "$ENV_NAME" = "prod" ]; then
       > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
   fi
 else
-  nohup "$FRONTEND_RUNNER" run dev -- -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
-    > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  if [ "$FRONTEND_RUNNER" = "pnpm" ]; then
+    nohup "$FRONTEND_RUNNER" exec next dev -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
+      > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  else
+    nohup npx next dev -H "$FRONTEND_HOST" -p "$FRONTEND_PORT" \
+      > "$LOGS/frontend.${APP_ENV}.log" 2>&1 &
+  fi
 fi
 echo $! > "$TMP/frontend.${APP_ENV}.pid"
 

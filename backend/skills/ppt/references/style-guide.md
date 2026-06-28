@@ -28,6 +28,18 @@ Avoid content slides that read as a wall of oversized blocks. A common cause is 
 
 Use full-height blocks only when they are part of the intended visual concept, such as a poster slide, KPI slide, comparison hero, chart, or full-slide diagram. Otherwise, let cards size to their content and leave intentional whitespace.
 
+Avoid stretching sparse cards to fill the slide. If cards contain only short labels and one-line explanations, reduce their visual weight or replace them with a richer structure such as a process, comparison, relationship map, or annotated example.
+
+## Layout Quality Checks
+
+Before finalizing a slide, check:
+
+- Does the main visual form match the content type?
+- Are large surfaces justified by enough information, structure, or visual hierarchy?
+- Could a diagram, flow, or relationship layout explain the idea better than independent cards?
+- Is the slide adding insight beyond restating the title?
+- Are decorative labels, subtitles, and card headings doing different jobs instead of repeating one another?
+
 ---
 
 ## CSS Gotchas

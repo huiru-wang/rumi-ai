@@ -75,6 +75,14 @@ https://fonts.loli.net/css2?family=Archivo+Black&family=Archivo:wght@400;500;600
 
 ## 4. Layout Grammar — 布局语法
 
+### Layout Preference — 轻彩信息图倾向
+
+This style works best as a light pastel infographic system. Prefer compact color modules, small labels, arrows, connectors, grouped annotations, and airy diagrams over oversized solid panels.
+
+Candy-colored blocks should feel like information modules or highlights, not heavy walls. When content is sparse, keep blocks smaller and let whitespace, lines, and relationships carry the composition.
+
+For technical or conceptual content, relationship maps, flows, state branches, and annotated mini-diagrams usually fit this style better than large isolated opinion cards. Cards are still welcome when the content is truly categorical or comparative.
+
 ### Cover / 封面页
 
 出现频次：1 页
@@ -219,7 +227,8 @@ https://fonts.loli.net/css2?family=Archivo+Black&family=Archivo:wght@400;500;600
 5. **不使用 emoji**：所有图标意义用线性图标或文字标签表达。
 6. **卡片保持节奏**：内容页的彩色卡片用于信息分区，而不是默认撑满页面；除非刻意做海报式满版构图，否则保持卡片紧凑、留白明确、节奏轻快。
 7. **装饰让位内容**：页眉、章节标签、底部说明都是可选装饰；当页面信息较多时，优先删减这些元素，确保主体内容不重叠、不拥挤。
-8. **保持前景/背景对比**：任何深色背景都必须使用浅色文字，任何浅色或糖果色背景都使用深墨灰文字；禁止黑底黑字、深底深字。
+8. **轻彩信息图优先**：机制、流程、关系类内容优先用箭头、连线、小标签、分组注释或轻量图解表达；卡片适合分类、对比和独立观点。
+9. **保持前景/背景对比**：任何深色背景都必须使用浅色文字，任何浅色或糖果色背景都使用深墨灰文字；禁止黑底黑字、深底深字。
 
 ### 页面生成规则
 - **封面页**：奶白底，深墨灰外框，顶部一个轻量标签，左侧大标题，右侧 3 个纵向糖果色条目卡片。
