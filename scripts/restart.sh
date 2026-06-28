@@ -3,7 +3,8 @@
 set -euo pipefail
 
 SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
+ENV_NAME="${1:-dev}"
 
-"$SCRIPTS/stop.sh"
+"$SCRIPTS/stop.sh" "$ENV_NAME"
 sleep 1
-"$SCRIPTS/start.sh"
+"$SCRIPTS/start.sh" "$ENV_NAME"

@@ -21,6 +21,7 @@ tmp/
 # Environment
 .env
 .env.local
+backend/.env.production
 
 # IDE
 .idea/

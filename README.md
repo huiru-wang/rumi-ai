@@ -166,16 +166,16 @@ RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档
 
 ```bash
 # 启动所有服务
-./scripts/start.sh
+./scripts/start.sh dev
 
 # 停止所有服务
-./scripts/stop.sh
+./scripts/stop.sh dev
 
 # 重启所有服务
-./scripts/restart.sh
+./scripts/restart.sh dev
 
 # 健康检查
-./scripts/doctor.sh
+./scripts/doctor.sh dev
 
 # 后端测试
 cd backend && uv run pytest tests/
@@ -183,6 +183,37 @@ cd backend && uv run pytest tests/
 # 前端 lint + build
 cd frontend && pnpm lint && pnpm build
 ```
+
+## 多环境启动
+
+脚本支持 `dev` 和 `prod` 两套运行配置，配置文件位于 `scripts/config/`。
+
+```bash
+# 开发环境：前端 3000，后端服务对本机/局域网开放，启用 reload/dev server
+./scripts/start.sh dev
+
+# 生产环境：前端 3001，内部服务绑定 127.0.0.1，由 Nginx 反代 rumi.robinverse.me
+cp backend/.env.production.example backend/.env.production
+# 编辑 backend/.env.production，填入生产 API Key / OSS / DATA_DIR 等配置
+./scripts/doctor.sh prod
+./scripts/start.sh prod
+```
+
+生产环境前端公开配置模板在 `frontend/.env.production.example`，`./scripts/start.sh prod` 会从 `scripts/config/prod.env` 注入同样的公开变量：
+
+```env
+NEXT_PUBLIC_API_BASE=https://rumi.robinverse.me
+NEXT_PUBLIC_LANGGRAPH_API_URL=https://rumi.robinverse.me/lg
+```
+
+生产端口约定：
+
+| 服务 | 端口 | 暴露方式 |
+|------|-----:|----------|
+| Next.js Frontend | 3001 | Nginx `/` 反代 |
+| FastAPI Backend | 8000 | Nginx `/api/` 反代 |
+| LangGraph Server | 2024 | Nginx `/lg/` 反代 |
+| ChromaDB | 8001 | 仅本机访问，不开放公网 |
 
 ## 项目结构
 
