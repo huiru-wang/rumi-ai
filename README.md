@@ -215,6 +215,13 @@ NEXT_PUBLIC_LANGGRAPH_API_URL=https://rumi.robinverse.me/lg
 | LangGraph Server | 2024 | Nginx `/lg/` 反代 |
 | ChromaDB | 8001 | 仅本机访问，不开放公网 |
 
+`scripts/config/prod.env` 默认使用国内镜像加速依赖安装：
+
+```env
+npm_config_registry=https://registry.npmmirror.com
+UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+```
+
 ## 项目结构
 
 ```

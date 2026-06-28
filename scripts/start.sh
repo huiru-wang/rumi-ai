@@ -94,6 +94,24 @@ CHROMA_BIND_HOST="${CHROMA_BIND_HOST:-0.0.0.0}"
 CHROMA_HOST="${CHROMA_HOST:-localhost}"
 CHROMA_PORT="${CHROMA_PORT:-8001}"
 DATA_DIR="${DATA_DIR:-./data}"
+npm_config_registry="${npm_config_registry:-${NPM_CONFIG_REGISTRY:-}}"
+NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-${npm_config_registry:-}}"
+UV_INDEX_URL="${UV_INDEX_URL:-}"
+UV_EXTRA_INDEX_URL="${UV_EXTRA_INDEX_URL:-}"
+
+if [ -n "$npm_config_registry" ]; then
+  export npm_config_registry NPM_CONFIG_REGISTRY
+  log "使用 npm registry: $npm_config_registry"
+fi
+
+if [ -n "$UV_INDEX_URL" ]; then
+  export UV_INDEX_URL
+  log "使用 uv Python index: $UV_INDEX_URL"
+fi
+
+if [ -n "$UV_EXTRA_INDEX_URL" ]; then
+  export UV_EXTRA_INDEX_URL
+fi
 
 require_cmd uv
 require_cmd node
