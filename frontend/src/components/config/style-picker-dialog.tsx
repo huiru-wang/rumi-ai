@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Check, ArrowLeft, Trash2, Loader2 } from "lucide-react";
-import { deletePptStyle, type PptStyleInfo } from "@/lib/api";
+import { deletePptStyle, getPptStylePreviewUrl, type PptStyleInfo } from "@/lib/api";
 
 interface StylePickerDialogProps {
   selectedId: string;
@@ -50,11 +50,6 @@ export function StylePickerDialog({
   }, [onClose, previewStyle, confirmDeleteId]);
 
   const categories = ["dark", "light", "custom"] as const;
-
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-
-  const getPreviewUrl = (style: PptStyleInfo) =>
-    `${apiBase}/api/ppt-style-preview/${style.preview_path}`;
 
   const handleDelete = async (style: PptStyleInfo) => {
     console.log("[StylePicker] deleting style:", style.id, style.name);
@@ -121,19 +116,21 @@ export function StylePickerDialog({
 
         {/* Content: picker grid or preview iframe */}
         {previewStyle ? (
-          <div className="relative flex-1 overflow-hidden">
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-muted/30 p-6">
             {/* Loading overlay */}
             {previewLoading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
                 <Loader2 size={28} className="animate-spin text-muted-foreground" />
               </div>
             )}
-            <iframe
-              src={getPreviewUrl(previewStyle)}
-              title={`${previewStyle.name} 全屏预览`}
-              className={`h-full w-full border-0 transition-opacity duration-300 ${previewLoading ? "opacity-0" : "opacity-100"}`}
-              onLoad={() => setPreviewLoading(false)}
-            />
+            <div className="aspect-video w-full max-w-[min(100%,calc((85vh-96px)*16/9))] overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+              <iframe
+                src={getPptStylePreviewUrl(previewStyle.id)}
+                title={`${previewStyle.name} 全屏预览`}
+                className={`h-full w-full border-0 transition-opacity duration-300 ${previewLoading ? "opacity-0" : "opacity-100"}`}
+                onLoad={() => setPreviewLoading(false)}
+              />
+            </div>
           </div>
         ) : (
           <div className="flex-1 overflow-y-auto p-5">
@@ -162,7 +159,7 @@ export function StylePickerDialog({
                             className="relative block aspect-[16/9] w-full cursor-pointer overflow-hidden bg-muted"
                           >
                             <iframe
-                              src={`${getPreviewUrl(style)}?thumb=1`}
+                              src={getPptStylePreviewUrl(style.id, true)}
                               title={style.name}
                               className="h-full w-full border-0 pointer-events-none"
                               loading="lazy"

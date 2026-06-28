@@ -675,6 +675,7 @@ skills/
 | `OPENAI_API_KEY` | 必填 | DeepSeek API 密钥 |
 | `OPENAI_API_BASE` | `https://api.deepseek.com` | DeepSeek API 地址 |
 | `MAIN_MODEL` | `deepseek-v4-flash` | Agent 图使用的 LLM 模型 |
+| `PUBLIC_API_BASE` | `http://localhost:8000` | 对外可访问的 FastAPI 地址，用于生成 PPT 风格图片资源代理 URL，避免向前端或模型产物暴露 OSS 真实地址 |
 | `SUMMARIZATION_API_KEY` | — | 摘要生成 API 密钥 |
 | `SUMMARIZATION_API_BASE` | `https://api.deepseek.com` | 摘要生成 API 地址 |
 | `SUMMARIZATION_MODEL` | `deepseek-v4-flash` | 摘要/文档处理/风格提取用 LLM |

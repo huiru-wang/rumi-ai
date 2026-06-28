@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Save, Check, Loader2, AlertCircle, Pencil } from "lucide-react";
-import { fetchFileContent, getFileViewUrl, saveTaskFile, type Task, type PptStyleInfo } from "@/lib/api";
+import { fetchFileContent, getTaskPreviewUrl, saveTaskFile, type Task, type PptStyleInfo } from "@/lib/api";
 
 // Script injected into iframe: handles edit mode sync + HTML export for save
 const EDIT_MODE_MONITOR_SCRIPT = `
@@ -51,6 +51,19 @@ interface PPTPreviewDialogProps {
   onClose: () => void;
 }
 
+function getResultData(task: Task): Record<string, unknown> {
+  if (!task.result_data) return {};
+  if (typeof task.result_data === "string") {
+    try {
+      const parsed = JSON.parse(task.result_data);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return task.result_data;
+}
+
 export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTPreviewDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -64,9 +77,10 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
   const htmlResponseResolver = useRef<((html: string) => void) | null>(null);
 
   // Derive style name from task result_data
-  const resultData = pptTask.result_data ? JSON.parse(pptTask.result_data) : null;
-  const styleId = resultData?.ppt_style || "";
-  const styleName = resultData?.ppt_style_name
+  const resultData = getResultData(pptTask);
+  const styleId = typeof resultData.ppt_style === "string" ? resultData.ppt_style : "";
+  const styleDisplayName = typeof resultData.ppt_style_name === "string" ? resultData.ppt_style_name : "";
+  const styleName = styleDisplayName
     || styles.find((s) => s.id === styleId || s.name_en === styleId)?.name
     || styleId;
   const pptTitle = pptTask.title || "未命名 PPT";
@@ -77,12 +91,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
 
     const init = async () => {
       try {
-        const result = JSON.parse(pptTask.result_data || "{}");
-        if (!result.file_path) {
-          throw new Error("PPT 文件路径缺失");
-        }
-
-        const fileUrl = getFileViewUrl(result.file_path);
+        const fileUrl = getTaskPreviewUrl(pptTask.id);
         const html = await fetchFileContent(fileUrl);
         if (cancelled) return;
 

@@ -15,6 +15,7 @@ from langchain_openai import ChatOpenAI
 from src.managers.prompt_manager import PromptManager
 from src.storage.database import Database
 from src.storage.file_store import FileStore
+from src.url_utils import build_style_resource_url
 
 logger = logging.getLogger(__name__)
 
@@ -433,6 +434,7 @@ class StyleExtractManager:
         preview_html_path = result_data.get("preview_html_path", "")
 
         target_prefix = f"user/{user_id}/style/{style_id}"
+        migrated_preview_path = ""
 
         try:
             # 1. Migrate source PPTX
@@ -479,6 +481,7 @@ class StyleExtractManager:
                     new_preview_path = await self.file_store._provider.save_async(dest_key, content)
                     await self.db.update_ppt_style_preview_path(style_id, new_preview_path)
                     style["preview_path"] = new_preview_path
+                    migrated_preview_path = new_preview_path
                     logger.info("[StyleExtract] migrated preview HTML to: %s", new_preview_path)
 
         except Exception as e:
@@ -489,16 +492,15 @@ class StyleExtractManager:
         resource_manifest = result_data.get("resource_manifest", [])
         if resource_manifest and resource_prefix:
             old_resource_base = f"{resource_prefix}/resource/"
-            new_resource_base = f"{target_prefix}/resource/"
-            # Build public URL for the new resource location
-            new_public_base = self.file_store._provider.get_public_url(new_resource_base).rstrip('/')
+            # Frontend-facing resources must go through the API proxy; never
+            # persist OSS public URLs or object keys into style metadata.
 
             url_replacements: list[tuple[str, str]] = []
             for res in resource_manifest:
                 old_url = res.get("url", "")
                 if old_url:
                     filename = res.get("filename", "")
-                    new_url = f"{new_public_base}/{filename}" if new_public_base else filename
+                    new_url = build_style_resource_url(style_id, filename) if filename else ""
                     url_replacements.append((old_url, new_url))
                     res["url"] = new_url
 
@@ -510,6 +512,14 @@ class StyleExtractManager:
                 if updated_desc != style_description:
                     style_description = updated_desc
                     logger.info("[StyleExtract] updated %d resource URLs in style %s", len(url_replacements), style_id)
+                if migrated_preview_path and await self.file_store.exists(migrated_preview_path):
+                    preview_html = await self.file_store.read_text(migrated_preview_path)
+                    updated_html = preview_html
+                    for old_url, new_url in url_replacements:
+                        updated_html = updated_html.replace(old_url, new_url)
+                    if updated_html != preview_html:
+                        await self.file_store.write_text(migrated_preview_path, updated_html)
+                        logger.info("[StyleExtract] updated resource URLs in preview HTML for style %s", style_id)
 
         # Persist resource_manifest and updated style_description to ppt_style
         update_fields: dict = {

@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>奶油粗野主义 · 风格预览</title>
+  <title>奶油轻彩风 · 风格预览</title>
 
   <!-- Fonts: fonts.loli.net (China-accessible Google Fonts mirror) -->
   <link rel="preconnect" href="https://fonts.loli.net" />
@@ -11,15 +11,15 @@
 
   <style>
     /* ===========================================
-       THEME VARIABLES — Cream Brutalism
-       奶白底 + 墨黑框 + 糖果色卡片
+       THEME VARIABLES — Cream Pastel Infographic
+       奶油纸底 + 糖果色卡片 + 深墨灰线条
        =========================================== */
     :root {
       --bg-primary: #FAF9F6;
       --bg-secondary: #FFFFFF;
-      --text-primary: #111111;
-      --text-secondary: #555555;
-      --accent-main: #111111;
+      --text-primary: #2A2926;
+      --text-secondary: #6B6760;
+      --accent-main: #3A3833;
       --accent-highlight: #A8E6A3;
       --accent-muted: #B8E7F7;
       --surface: #F0F0F0;
@@ -174,7 +174,7 @@
     }
 
     /* ===========================================
-       COVER SLIDE — Cream Brutalism
+       COVER SLIDE — Cream Pastel Infographic
        =========================================== */
     .cover-slide {
       background-color: var(--bg-primary);
@@ -183,7 +183,7 @@
       background-size: 200px 200px;
     }
 
-    /* Thick black outer frame */
+    /* Deep graphite outer frame */
     .cover-frame {
       flex: 1;
       margin: var(--slide-padding);
@@ -269,8 +269,9 @@
       letter-spacing: 0.12em;
       text-transform: uppercase;
       padding: 0.5em 1.1em;
-      background: var(--accent-main);
-      color: var(--bg-primary);
+      background: var(--accent-yellow);
+      color: var(--text-primary);
+      border: calc(var(--border-thick) - 1px) solid var(--accent-main);
       border-radius: 999px;
     }
 
@@ -458,55 +459,6 @@
     .delay-6 { transition-delay: 0.58s; }
 
     /* ===========================================
-       INLINE EDITING UI
-       =========================================== */
-    .edit-hotzone {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 80px;
-      height: 80px;
-      z-index: 10000;
-      cursor: pointer;
-    }
-
-    .edit-toggle {
-      position: fixed;
-      top: 14px;
-      left: 14px;
-      z-index: 10001;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-      font-family: var(--font-label);
-      font-size: 13px;
-      font-weight: 600;
-      padding: 8px 14px;
-      border: 2px solid var(--accent-main);
-      border-radius: 999px;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      cursor: pointer;
-      box-shadow: 3px 3px 0 0 var(--accent-main);
-    }
-
-    .edit-toggle.show,
-    .edit-toggle.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    body.edit-active .editable {
-      outline: 2px dashed var(--accent-main);
-      outline-offset: 3px;
-      cursor: text;
-    }
-
-    body.edit-active .editable:hover {
-      background: rgba(17, 17, 17, 0.04);
-    }
-
-    /* ===========================================
        RESPONSIVE COVER ADJUSTMENTS
        =========================================== */
     @media (max-width: 900px) {
@@ -551,9 +503,6 @@
 </head>
 <body>
   <!-- Inline editing hotzone & toggle -->
-  <div class="edit-hotzone" aria-hidden="true"></div>
-  <button class="edit-toggle" id="editToggle" title="按 E 切换编辑模式">✏️ 编辑</button>
-
   <!-- Single cover slide -->
   <section class="slide cover-slide" id="slide-1">
     <div class="cover-frame">
@@ -561,8 +510,8 @@
       <header class="cover-header">
         <div class="header-pill editable reveal delay-1">Style Lab</div>
         <div class="header-tags">
-          <span class="header-tag pink editable reveal delay-2">奶油粗野主义</span>
-          <span class="header-tag yellow editable reveal delay-2">Cream Brutalism</span>
+          <span class="header-tag pink editable reveal delay-2">奶油轻彩风</span>
+          <span class="header-tag yellow editable reveal delay-2">Cream Pastel Infographic</span>
         </div>
       </header>
 
@@ -570,12 +519,12 @@
       <main class="cover-body">
         <div class="title-area">
           <div class="guide-label editable reveal-left delay-1">风格预览 / Style Preview</div>
-          <h1 class="en-title editable reveal-left delay-2">Cream<br/>Brutalism</h1>
+          <h1 class="en-title editable reveal-left delay-2">Cream<br/>Pastel</h1>
           <div class="cn-title-box reveal-scale delay-3">
-            <h2 class="cn-title editable">奶油粗野主义</h2>
+            <h2 class="cn-title editable">奶油轻彩风</h2>
           </div>
           <p class="subtitle editable reveal-left delay-4">
-            奶白底黑框的粗野主义信息图，糖果色卡片与大号数据，适合趋势解读与知识分享。
+            奶油纸底的轻彩信息图，糖果色卡片与大号数据，适合知识分享和趋势解读。
           </p>
         </div>
 
@@ -583,8 +532,8 @@
           <article class="feature-card green reveal-right delay-3">
             <span class="card-num editable">01</span>
             <div class="card-text">
-              <h3 class="card-title editable">粗野主义骨架</h3>
-              <p class="card-desc editable">奶白纸面 + 墨黑粗框，建立强烈的结构骨架与编辑感。</p>
+              <h3 class="card-title editable">轻彩信息骨架</h3>
+              <p class="card-desc editable">奶油纸面 + 深墨灰结构线，建立清晰但轻盈的信息骨架。</p>
             </div>
           </article>
 
@@ -592,7 +541,7 @@
             <span class="card-num editable">02</span>
             <div class="card-text">
               <h3 class="card-title editable">糖果色卡片</h3>
-              <p class="card-desc editable">薄荷绿、浅蓝、柔粉、柠黄四色承载信息角色，黑字高对比。</p>
+              <p class="card-desc editable">薄荷绿、浅蓝、柔粉、柠黄四色承载信息角色，深墨灰文字清晰可读。</p>
             </div>
           </article>
 
@@ -600,7 +549,7 @@
             <span class="card-num editable">03</span>
             <div class="card-text">
               <h3 class="card-title editable">杂志式排版</h3>
-              <p class="card-desc editable">大号数字、药丸标签与错位阴影，拼贴出独立信息图表气质。</p>
+              <p class="card-desc editable">大号数字、药丸标签与轻量错位阴影，拼贴出轻快信息图气质。</p>
             </div>
           </article>
         </div>
@@ -608,8 +557,8 @@
 
       <!-- Bottom footer -->
       <footer class="cover-footer">
-        <p class="footer-note editable reveal delay-6">奶油色背景 · 黑色粗边框 · 糖果色信息块 · 零外部图片依赖</p>
-        <span class="ratio-badge editable reveal delay-6">横版 · 16:9</span>
+        <p class="footer-note editable reveal delay-6">奶油纸底 · 糖果色信息块 · 深墨灰结构线 · 零外部图片依赖</p>
+        <span class="ratio-badge editable reveal delay-6">轻彩信息图</span>
       </footer>
     </div>
   </section>
@@ -704,124 +653,8 @@
       }
     }
 
-    /* ===========================================
-       INLINE EDITOR
-       =========================================== */
-    class InlineEditor {
-      constructor() {
-        this.isActive = false;
-        this.toggleBtn = document.getElementById('editToggle');
-        this.hotzone = document.querySelector('.edit-hotzone');
-        this.hideTimeout = null;
-
-        this.setupToggle();
-        this.setupHotzone();
-        this.setupKeyboard();
-        this.setupAutoSave();
-      }
-
-      setupToggle() {
-        this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
-        this.hotzone.addEventListener('click', () => this.toggleEditMode());
-      }
-
-      setupHotzone() {
-        const show = () => {
-          clearTimeout(this.hideTimeout);
-          this.toggleBtn.classList.add('show');
-        };
-        const hide = () => {
-          this.hideTimeout = setTimeout(() => {
-            if (!this.isActive) this.toggleBtn.classList.remove('show');
-          }, 400);
-        };
-
-        this.hotzone.addEventListener('mouseenter', show);
-        this.hotzone.addEventListener('mouseleave', hide);
-        this.toggleBtn.addEventListener('mouseenter', show);
-        this.toggleBtn.addEventListener('mouseleave', hide);
-      }
-
-      setupKeyboard() {
-        document.addEventListener('keydown', (e) => {
-          if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
-            this.toggleEditMode();
-          }
-          if (e.ctrlKey && e.key === 's' && this.isActive) {
-            e.preventDefault();
-            this.exportFile();
-          }
-        });
-      }
-
-      toggleEditMode() {
-        this.isActive = !this.isActive;
-        document.body.classList.toggle('edit-active', this.isActive);
-        this.toggleBtn.classList.toggle('active', this.isActive);
-        this.toggleBtn.textContent = this.isActive ? '✓ 完成' : '✏️ 编辑';
-
-        const textElements = document.querySelectorAll(
-          '.editable, h1, h2, h3, p, span'
-        );
-        textElements.forEach(el => {
-          if (this.isActive) {
-            el.setAttribute('contenteditable', 'true');
-          } else {
-            el.removeAttribute('contenteditable');
-          }
-        });
-      }
-
-      setupAutoSave() {
-        const key = 'ppt-' + document.title;
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          try {
-            JSON.parse(saved).forEach(item => {
-              const el = document.querySelector(`[data-edit-id="${item.id}"]`);
-              if (el) el.innerHTML = item.html;
-            });
-          } catch (e) {}
-        }
-
-        document.addEventListener('input', (e) => {
-          if (e.target.isContentEditable) {
-            const editable = document.querySelectorAll('[contenteditable="true"]');
-            const data = Array.from(editable).map(el => {
-              if (!el.dataset.editId) {
-                el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
-              }
-              return { id: el.dataset.editId, html: el.innerHTML };
-            });
-            localStorage.setItem(key, JSON.stringify(data));
-          }
-        });
-      }
-
-      exportFile() {
-        const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
-        editableEls.forEach(el => el.removeAttribute('contenteditable'));
-        document.body.classList.remove('edit-active');
-        this.toggleBtn?.classList.remove('active', 'show');
-
-        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-        document.body.classList.add('edit-active');
-        editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
-        this.toggleBtn?.classList.add('active');
-
-        const blob = new Blob([html], { type: 'text/html' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'cream-brutalism-cover-preview.html';
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-    }
 
     /* Initialize */
-    new SlidePresentation();
-    new InlineEditor();
-  </script>
+    new SlidePresentation();  </script>
 </body>
 </html>

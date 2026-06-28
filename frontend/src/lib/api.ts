@@ -202,7 +202,7 @@ export interface Task {
   type: string;
   title: string | null;
   status: string;
-  result_data: string | null;
+  result_data: Record<string, unknown> | string | null;
   parent_task_id?: string | null;
   children?: Task[];
   created_at: string;
@@ -238,7 +238,6 @@ export interface PptStyleInfo {
   name: string;
   name_en: string;
   description: string;
-  preview_path: string;
   created_at: string;
 }
 
@@ -312,18 +311,27 @@ export function saveStyleFromExtraction(
 
 // --- Files ---
 
-/**
- * Encode each path segment individually while preserving `/` separators.
- * Required for `fetch()` which does NOT auto-encode URLs (unlike browser navigation).
- */
-function encodeFilePath(filePath: string): string {
-  return filePath.split("/").map(encodeURIComponent).join("/");
+/** Build a URL for PPT task preview by task id. */
+export function getTaskPreviewUrl(taskId: string, thumb = false): string {
+  const qs = thumb ? `?thumb=1` : "";
+  return `${API_BASE}/api/tasks/${encodeURIComponent(taskId)}/preview${qs}`;
 }
 
-/** Build a URL for inline file preview (served with Content-Disposition: inline). */
-export function getFileViewUrl(filePath: string, thumb = false): string {
+/** Build a URL for a narration slide audio by task id and slide number. */
+export function getTaskAudioUrl(taskId: string, slideNumber: number): string {
+  return `${API_BASE}/api/tasks/${encodeURIComponent(taskId)}/audio/${encodeURIComponent(String(slideNumber))}`;
+}
+
+/** Build a URL for PPT style preview by style id. */
+export function getPptStylePreviewUrl(styleId: string, thumb = false): string {
   const qs = thumb ? `?thumb=1` : "";
-  return `${API_BASE}/api/file-view/${encodeFilePath(filePath)}${qs}`;
+  return `${API_BASE}/api/ppt-styles/${encodeURIComponent(styleId)}/preview${qs}`;
+}
+
+/** Build a URL for completed style extraction task preview by task id. */
+export function getStyleExtractionPreviewUrl(taskId: string, thumb = false): string {
+  const qs = thumb ? `?thumb=1` : "";
+  return `${API_BASE}/api/tasks/${encodeURIComponent(taskId)}/style-preview${qs}`;
 }
 
 /**
@@ -331,7 +339,7 @@ export function getFileViewUrl(filePath: string, thumb = false): string {
  * Backend resolves the file path from the task record — frontend only needs taskId.
  * Uses fetch + Blob URL to work across origins.
  */
-export async function downloadTaskFile(taskId: string, filename: string): Promise<void> {
+export async function downloadTaskFile(taskId: string, filename = "download"): Promise<void> {
   const url = `${API_BASE}/api/tasks/${taskId}/download?t=${Date.now()}`;
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Download failed: ${res.status}`);

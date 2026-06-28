@@ -405,59 +405,6 @@
         .reveal:nth-child(6) { transition-delay: 0.48s; }
 
         /* ===========================================
-           INLINE EDITING
-           Default enabled
-           =========================================== */
-        .edit-hotzone {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 80px;
-            height: 80px;
-            z-index: 10000;
-            cursor: pointer;
-        }
-
-        .edit-toggle {
-            position: fixed;
-            top: clamp(0.75rem, 2vw, 1rem);
-            left: clamp(0.75rem, 2vw, 1rem);
-            width: clamp(2rem, 4vw, 2.5rem);
-            height: clamp(2rem, 4vw, 2.5rem);
-            border-radius: 50%;
-            border: none;
-            background: var(--surface);
-            backdrop-filter: blur(8px);
-            font-size: clamp(1rem, 2vw, 1.25rem);
-            cursor: pointer;
-            opacity: 0;
-            pointer-events: none;
-            transition: opacity 0.3s ease;
-            z-index: 10001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .edit-toggle.show,
-        .edit-toggle.active {
-            opacity: 1;
-            pointer-events: auto;
-        }
-
-        body.edit-active h1,
-        body.edit-active h2,
-        body.edit-active h3,
-        body.edit-active p,
-        body.edit-active .badge,
-        body.edit-active .cover-tagline,
-        body.edit-active .cover-slogan {
-            outline: 1px dashed var(--accent-main);
-            outline-offset: 2px;
-            cursor: text;
-        }
-
-        /* ===========================================
            RESPONSIVE ADJUSTMENTS FOR SPLIT LAYOUT
            =========================================== */
         @media (max-width: 768px) {
@@ -491,9 +438,6 @@
     <nav class="nav-dots" id="navDots" aria-label="幻灯片导航"></nav>
 
     <!-- Inline editing controls -->
-    <div class="edit-hotzone" id="editHotzone"></div>
-    <button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✏️</button>
-
     <!-- ===========================================
          COVER SLIDE: TEMPLATE PREVIEW
          =========================================== -->
@@ -628,135 +572,10 @@
             }
         }
 
-        /* ===========================================
-           INLINE EDITOR
-           Toggle edit mode, auto-save to localStorage
-           =========================================== */
-        class InlineEditor {
-            constructor() {
-                this.isActive = false;
-                this.toggleBtn = document.getElementById('editToggle');
-                this.hotzone = document.getElementById('editHotzone');
-                this.setupToggle();
-                this.setupHotzone();
-                this.setupShortcut();
-                this.setupAutoSave();
-                this.setupExport();
-            }
-
-            setupToggle() {
-                this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
-            }
-
-            setupHotzone() {
-                let hideTimeout = null;
-
-                this.hotzone.addEventListener('mouseenter', () => {
-                    clearTimeout(hideTimeout);
-                    this.toggleBtn.classList.add('show');
-                });
-                this.hotzone.addEventListener('mouseleave', () => {
-                    hideTimeout = setTimeout(() => {
-                        if (!this.isActive) this.toggleBtn.classList.remove('show');
-                    }, 400);
-                });
-                this.toggleBtn.addEventListener('mouseenter', () => {
-                    clearTimeout(hideTimeout);
-                });
-                this.toggleBtn.addEventListener('mouseleave', () => {
-                    hideTimeout = setTimeout(() => {
-                        if (!this.isActive) this.toggleBtn.classList.remove('show');
-                    }, 400);
-                });
-                this.hotzone.addEventListener('click', () => this.toggleEditMode());
-            }
-
-            setupShortcut() {
-                document.addEventListener('keydown', (e) => {
-                    if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
-                        this.toggleEditMode();
-                    }
-                });
-            }
-
-            toggleEditMode() {
-                this.isActive = !this.isActive;
-                document.body.classList.toggle('edit-active', this.isActive);
-                this.toggleBtn.classList.toggle('active', this.isActive);
-                this.toggleBtn.textContent = this.isActive ? '✓' : '✏️';
-
-                const textElements = document.querySelectorAll(
-                    'h1, h2, h3, p, .badge, .cover-tagline, .cover-slogan'
-                );
-                textElements.forEach(el => {
-                    if (this.isActive) {
-                        el.setAttribute('contenteditable', 'true');
-                    } else {
-                        el.removeAttribute('contenteditable');
-                    }
-                });
-            }
-
-            setupAutoSave() {
-                const key = 'ppt-' + document.title;
-                const saved = localStorage.getItem(key);
-                if (saved) {
-                    try {
-                        JSON.parse(saved).forEach(item => {
-                            const el = document.querySelector(`[data-edit-id="${item.id}"]`);
-                            if (el) el.innerHTML = item.html;
-                        });
-                    } catch(e) {}
-                }
-                document.addEventListener('input', (e) => {
-                    if (e.target.isContentEditable) {
-                        const editable = document.querySelectorAll('[contenteditable="true"]');
-                        const data = Array.from(editable).map(el => {
-                            if (!el.dataset.editId) {
-                                el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
-                            }
-                            return { id: el.dataset.editId, html: el.innerHTML };
-                        });
-                        localStorage.setItem(key, JSON.stringify(data));
-                    }
-                });
-            }
-
-            setupExport() {
-                document.addEventListener('keydown', (e) => {
-                    if ((e.ctrlKey || e.metaKey) && e.key === 's' && this.isActive) {
-                        e.preventDefault();
-                        this.exportFile();
-                    }
-                });
-            }
-
-            exportFile() {
-                const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
-                editableEls.forEach(el => el.removeAttribute('contenteditable'));
-                document.body.classList.remove('edit-active');
-                this.toggleBtn.classList.remove('active', 'show');
-
-                const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-                document.body.classList.add('edit-active');
-                editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
-                this.toggleBtn.classList.add('active');
-
-                const blob = new Blob([html], { type: 'text/html' });
-                const a = document.createElement('a');
-                a.href = URL.createObjectURL(blob);
-                a.download = '桃紫分境_封面预览.html';
-                a.click();
-                URL.revokeObjectURL(a.href);
-            }
-        }
 
         /* ===========================================
            INITIALIZE
            =========================================== */
-        const presentation = new SlidePresentation();
-        const editor = new InlineEditor();
-    </script>
+        const presentation = new SlidePresentation();    </script>
 </body>
 </html>

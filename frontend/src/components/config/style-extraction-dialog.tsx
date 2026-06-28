@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle } from "lucide-react";
-import { getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
+import { getStyleExtractionPreviewUrl, getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
 
 interface StyleExtractionDialogProps {
   workspaceId: string;
@@ -170,17 +170,12 @@ export function StyleExtractionDialog({
         : task.result_data)
     : null;
 
-  const previewPath = rd?.preview_html_path as string | undefined;
   const styleName = rd?.style_name as string | undefined;
   const shortDescription = rd?.description as string | undefined;
   const alreadySaved = !!rd?.saved_style_id;
   const isCompleted = task?.status === "completed";
   const isFailed = task?.status === "failed" || task?.status === "cancelled";
-
-  const apiBase = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
-  const previewUrl = previewPath
-    ? `${apiBase}/api/ppt-style-preview/${previewPath}`
-    : null;
+  const previewUrl = isCompleted ? getStyleExtractionPreviewUrl(taskId) : null;
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">

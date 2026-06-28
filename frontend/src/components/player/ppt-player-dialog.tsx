@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Play, Pause, ChevronLeft, ChevronRight, Loader2, AlertCircle, Volume2, VolumeX, Maximize, Minimize } from "lucide-react";
-import { fetchFileContent, getFileViewUrl, type Task } from "@/lib/api";
+import { fetchFileContent, getTaskAudioUrl, getTaskPreviewUrl, type Task } from "@/lib/api";
 
 const NAV_SCRIPT = `
 /* Lock down: disable all manual interaction */
@@ -31,6 +31,19 @@ interface SlideData {
   title: string;
   audioUrl: string;
   hasAudio: boolean;
+}
+
+function getResultData(task: Task): Record<string, unknown> {
+  if (!task.result_data) return {};
+  if (typeof task.result_data === "string") {
+    try {
+      const parsed = JSON.parse(task.result_data);
+      return parsed && typeof parsed === "object" ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return task.result_data;
 }
 
 interface PPTPlayerDialogProps {
@@ -70,25 +83,20 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
 
     const init = async () => {
       try {
-        const pptResult = JSON.parse(pptTask.result_data || "{}");
-        const narrResult = JSON.parse(narrationTask.result_data || "{}");
+        const narrResult = getResultData(narrationTask);
 
-        if (!pptResult.file_path) {
-          throw new Error("PPT 文件路径缺失");
-        }
-
-        const pptFileUrl = getFileViewUrl(pptResult.file_path);
+        const pptFileUrl = getTaskPreviewUrl(pptTask.id);
         const html = await fetchFileContent(pptFileUrl);
         if (cancelled) return;
 
         const injectedHtml = html.replace("</body>", `<script>${NAV_SCRIPT}</script></body>`);
         setPptHtml(injectedHtml);
 
-        const narrSlides: SlideData[] = (narrResult.slides || []).map((s: { number?: number; title?: string; audio_path?: string | null }) => ({
+        const narrSlides: SlideData[] = ((narrResult.slides as Array<{ number?: number; title?: string; has_audio?: boolean }> | undefined) || []).map((s) => ({
           number: s.number || 0,
           title: s.title || "",
-          audioUrl: s.audio_path ? getFileViewUrl(s.audio_path) : "",
-          hasAudio: !!s.audio_path,
+          audioUrl: s.has_audio && s.number ? getTaskAudioUrl(narrationTask.id, s.number) : "",
+          hasAudio: !!s.has_audio,
         }));
         setSlides(narrSlides);
         setDurations(new Array(narrSlides.length).fill(0));

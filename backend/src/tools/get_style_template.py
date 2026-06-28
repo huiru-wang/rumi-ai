@@ -5,6 +5,7 @@ from langchain.tools import tool, ToolRuntime
 
 from src.agent.state import MainAgentState
 from src.storage.database import Database
+from src.url_utils import build_style_resource_url
 
 logger = logging.getLogger(__name__)
 
@@ -57,6 +58,7 @@ def _build_template_text(record: dict) -> str:
     name_en = record.get("name_en", "")
     description = record.get("description", "")
     style_desc = record.get("style_description", "")
+    style_id = record.get("id", "")
 
     lines = [
         f"# PPT 风格模版：{name}（{name_en}）",
@@ -93,7 +95,7 @@ def _build_template_text(record: dict) -> str:
             lines.append("|------|-----|----------|")
             for res in resource_manifest:
                 fn = res.get("filename", "")
-                url = res.get("url", "")
+                url = build_style_resource_url(style_id, fn) if style_id and fn else ""
                 desc = res.get("description", {})
                 notes = desc.get("usage_notes", "") if isinstance(desc, dict) else ""
                 lines.append(f"| {fn} | `{url}` | {notes} |")

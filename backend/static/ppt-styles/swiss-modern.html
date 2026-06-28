@@ -297,51 +297,6 @@
     }
 
     /* ===========================================
-       INLINE EDITING UI
-       默认启用：悬停左上角或按 E 进入编辑
-       =========================================== */
-    .edit-hotzone {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 80px;
-      height: 80px;
-      z-index: 10000;
-      cursor: pointer;
-    }
-    .edit-toggle {
-      position: fixed;
-      top: 16px;
-      left: 16px;
-      width: 44px;
-      height: 44px;
-      border-radius: 0;
-      border: 1px solid rgba(255, 255, 255, 0.35);
-      background: rgba(0, 0, 0, 0.2);
-      color: #fff;
-      font-size: 18px;
-      cursor: pointer;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-      z-index: 10001;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-    }
-    .edit-toggle.show,
-    .edit-toggle.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-    body.edit-active .edit-toggle { opacity: 1; pointer-events: auto; }
-    body.edit-active [contenteditable="true"] {
-      outline: 2px dashed rgba(255, 255, 255, 0.8);
-      outline-offset: 4px;
-      cursor: text;
-    }
-
-    /* ===========================================
        RESPONSIVE ADJUSTMENTS
        =========================================== */
     @media (max-width: 900px) {
@@ -358,9 +313,6 @@
 </head>
 <body>
   <div class="progress-bar" id="progressBar"></div>
-  <div class="edit-hotzone" aria-hidden="true"></div>
-  <button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✏️</button>
-
   <!-- SLIDE 1: Cover -->
   <section class="slide slide-cover" data-slide="1">
     <div class="ascii-field" id="asciiCover"></div>
@@ -443,116 +395,7 @@
       }
     }
 
-    /* ===========================================
-       INLINE EDITOR
-       支持悬停左上角或按 E 切换编辑模式
-       =========================================== */
-    class InlineEditor {
-      constructor() {
-        this.isActive = false;
-        this.toggleBtn = document.getElementById('editToggle');
-        this.hotzone = document.querySelector('.edit-hotzone');
-        this.setupToggle();
-        this.setupAutoSave();
-        this.restoreEdits();
-      }
 
-      setupToggle() {
-        this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
-        this.hotzone.addEventListener('click', () => this.toggleEditMode());
-
-        let hideTimeout = null;
-        const showBtn = () => { clearTimeout(hideTimeout); this.toggleBtn.classList.add('show'); };
-        const hideBtn = () => {
-          hideTimeout = setTimeout(() => {
-            if (!this.isActive) this.toggleBtn.classList.remove('show');
-          }, 400);
-        };
-
-        this.hotzone.addEventListener('mouseenter', showBtn);
-        this.hotzone.addEventListener('mouseleave', hideBtn);
-        this.toggleBtn.addEventListener('mouseenter', showBtn);
-        this.toggleBtn.addEventListener('mouseleave', hideBtn);
-
-        document.addEventListener('keydown', (e) => {
-          if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
-            this.toggleEditMode();
-          }
-          if (e.ctrlKey && e.key === 's' && this.isActive) {
-            e.preventDefault();
-            this.exportFile();
-          }
-        });
-      }
-
-      toggleEditMode() {
-        this.isActive = !this.isActive;
-        document.body.classList.toggle('edit-active', this.isActive);
-        this.toggleBtn.classList.toggle('active', this.isActive);
-        this.toggleBtn.textContent = this.isActive ? '✓' : '✏️';
-
-        const textElements = document.querySelectorAll(
-          'h1, h2, h3, p, span'
-        );
-        textElements.forEach(el => {
-          if (this.isActive) {
-            el.setAttribute('contenteditable', 'true');
-          } else {
-            el.removeAttribute('contenteditable');
-          }
-        });
-      }
-
-      exportFile() {
-        const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
-        editableEls.forEach(el => el.removeAttribute('contenteditable'));
-        document.body.classList.remove('edit-active');
-        this.toggleBtn.classList.remove('active', 'show');
-
-        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-        document.body.classList.add('edit-active');
-        editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
-        this.toggleBtn.classList.add('active');
-
-        const blob = new Blob([html], { type: 'text/html' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'swiss-modern-cover-preview.html';
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-
-      setupAutoSave() {
-        const key = 'ppt-' + document.title;
-        document.addEventListener('input', (e) => {
-          if (!e.target.isContentEditable) return;
-          const editable = document.querySelectorAll('[contenteditable="true"]');
-          const data = Array.from(editable).map(el => {
-            if (!el.dataset.editId) {
-              el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
-            }
-            return { id: el.dataset.editId, html: el.innerHTML };
-          });
-          localStorage.setItem(key, JSON.stringify(data));
-        });
-      }
-
-      restoreEdits() {
-        const key = 'ppt-' + document.title;
-        const saved = localStorage.getItem(key);
-        if (!saved) return;
-        try {
-          JSON.parse(saved).forEach(item => {
-            const el = document.querySelector(`[data-edit-id="${item.id}"]`);
-            if (el) el.innerHTML = item.html;
-          });
-        } catch (e) {}
-      }
-    }
-
-    new SlidePresentation();
-    new InlineEditor();
-  </script>
+    new SlidePresentation();  </script>
 </body>
 </html>

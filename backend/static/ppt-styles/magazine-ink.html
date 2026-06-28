@@ -435,51 +435,6 @@
     }
 
     /* ===========================================
-       INLINE EDITING UI
-       =========================================== */
-    .edit-hotzone {
-      position: fixed;
-      top: 0;
-      left: 0;
-      width: 80px;
-      height: 80px;
-      z-index: 10000;
-      cursor: pointer;
-    }
-
-    .edit-toggle {
-      position: fixed;
-      top: 12px;
-      left: 12px;
-      z-index: 10001;
-      padding: 0.45rem 0.75rem;
-      font-family: var(--font-mono);
-      font-size: 0.75rem;
-      letter-spacing: 0.08em;
-      text-transform: uppercase;
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      border: none;
-      border-radius: 4px;
-      cursor: pointer;
-      opacity: 0;
-      pointer-events: none;
-      transition: opacity 0.3s ease;
-    }
-
-    .edit-toggle.show,
-    .edit-toggle.active {
-      opacity: 1;
-      pointer-events: auto;
-    }
-
-    body.edit-active [contenteditable="true"] {
-      outline: 1px dashed rgba(241, 239, 234, 0.5);
-      outline-offset: 4px;
-      cursor: text;
-    }
-
-    /* ===========================================
        SMALL VIEWPORT TWEAKS FOR COVER
        =========================================== */
     @media (max-width: 600px) {
@@ -500,9 +455,6 @@
   <nav class="nav-dots" id="navDots" aria-label="幻灯片导航"></nav>
 
   <!-- Edit mode trigger -->
-  <div class="edit-hotzone" aria-hidden="true"></div>
-  <button class="edit-toggle" id="editToggle" title="编辑模式 (E)">✏️ 编辑</button>
-
   <!-- COVER SLIDE -->
   <section class="slide title-slide" id="slide-1" aria-label="封面">
     <div class="bg-atmosphere"></div>
@@ -644,121 +596,8 @@
       }
     }
 
-    /* ===========================================
-       INLINE EDITOR
-       =========================================== */
-    class InlineEditor {
-      constructor() {
-        this.isActive = false;
-        this.toggleBtn = document.getElementById('editToggle');
-        this.hotzone = document.querySelector('.edit-hotzone');
-        this.hideTimeout = null;
 
-        this.setupToggle();
-        this.setupHotzone();
-        this.setupAutoSave();
-        this.setupExport();
-      }
-
-      setupToggle() {
-        this.toggleBtn.addEventListener('click', () => this.toggleEditMode());
-      }
-
-      setupHotzone() {
-        const show = () => {
-          clearTimeout(this.hideTimeout);
-          this.toggleBtn.classList.add('show');
-        };
-        const hide = () => {
-          this.hideTimeout = setTimeout(() => {
-            if (!this.isActive) this.toggleBtn.classList.remove('show');
-          }, 400);
-        };
-
-        this.hotzone.addEventListener('mouseenter', show);
-        this.hotzone.addEventListener('mouseleave', hide);
-        this.toggleBtn.addEventListener('mouseenter', show);
-        this.toggleBtn.addEventListener('mouseleave', hide);
-        this.hotzone.addEventListener('click', () => this.toggleEditMode());
-      }
-
-      toggleEditMode() {
-        this.isActive = !this.isActive;
-        document.body.classList.toggle('edit-active', this.isActive);
-        this.toggleBtn.classList.toggle('active', this.isActive);
-        this.toggleBtn.textContent = this.isActive ? '✓ 完成' : '✏️ 编辑';
-
-        const textElements = document.querySelectorAll(
-          'h1, h2, h3, h4, p, li, .hero-kicker, .meta-row span, .mag-header span, .mag-footer span'
-        );
-        textElements.forEach(el => {
-          if (this.isActive) {
-            el.setAttribute('contenteditable', 'true');
-          } else {
-            el.removeAttribute('contenteditable');
-          }
-        });
-      }
-
-      setupAutoSave() {
-        const key = 'ppt-' + document.title;
-        const saved = localStorage.getItem(key);
-        if (saved) {
-          try {
-            JSON.parse(saved).forEach(item => {
-              const el = document.querySelector(`[data-edit-id="${item.id}"]`);
-              if (el) el.innerHTML = item.html;
-            });
-          } catch (e) {}
-        }
-
-        document.addEventListener('input', (e) => {
-          if (e.target.isContentEditable) {
-            const editable = document.querySelectorAll('[contenteditable="true"]');
-            const data = Array.from(editable).map(el => {
-              if (!el.dataset.editId) {
-                el.dataset.editId = 'ed-' + Math.random().toString(36).slice(2, 10);
-              }
-              return { id: el.dataset.editId, html: el.innerHTML };
-            });
-            localStorage.setItem(key, JSON.stringify(data));
-          }
-        });
-      }
-
-      setupExport() {
-        document.addEventListener('keydown', (e) => {
-          if ((e.key === 's' || e.key === 'S') && (e.ctrlKey || e.metaKey) && this.isActive) {
-            e.preventDefault();
-            this.exportFile();
-          }
-        });
-      }
-
-      exportFile() {
-        const editableEls = Array.from(document.querySelectorAll('[contenteditable]'));
-        editableEls.forEach(el => el.removeAttribute('contenteditable'));
-        document.body.classList.remove('edit-active');
-        this.toggleBtn?.classList.remove('active', 'show');
-
-        const html = '<!DOCTYPE html>\n' + document.documentElement.outerHTML;
-
-        document.body.classList.add('edit-active');
-        editableEls.forEach(el => el.setAttribute('contenteditable', 'true'));
-        this.toggleBtn?.classList.add('active');
-
-        const blob = new Blob([html], { type: 'text/html' });
-        const a = document.createElement('a');
-        a.href = URL.createObjectURL(blob);
-        a.download = 'magazine-ink-cover-preview.html';
-        a.click();
-        URL.revokeObjectURL(a.href);
-      }
-    }
-
-    /* Keyboard shortcut for edit mode */
-    const editor = new InlineEditor();
-    document.addEventListener('keydown', (e) => {
+    /* Keyboard shortcut for edit mode */    document.addEventListener('keydown', (e) => {
       if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
         editor.toggleEditMode();
       }

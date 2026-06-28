@@ -20,6 +20,18 @@ import {
 } from "lucide-react";
 import { listTasks, deleteTask, downloadTaskFile, type Task, type PptStyleInfo, type VoiceInfo } from "@/lib/api";
 
+function getTaskResultData(task: Task): Record<string, any> | null {
+  if (!task.result_data) return null;
+  if (typeof task.result_data === "string") {
+    try {
+      return JSON.parse(task.result_data);
+    } catch {
+      return null;
+    }
+  }
+  return task.result_data as Record<string, any>;
+}
+
 interface TaskPanelProps {
   workspaceId: string;
   styles: PptStyleInfo[];
@@ -233,9 +245,7 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
   const TypeIcon = typeConfig.icon;
   const StatusIcon = statusConfig.icon;
 
-  const resultData = task.result_data
-    ? JSON.parse(task.result_data)
-    : null;
+  const resultData = getTaskResultData(task);
 
   let statusLabel: string = statusConfig.label;
   if (task.status === "tts_generating" && resultData) {
@@ -252,8 +262,8 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
     statusLabel = STEP_LABELS[resultData.progress_step] || "生成中";
   }
 
-  const hasDownload = task.status === "completed" && resultData?.file_path;
   const isPptCompleted = task.type === "ppt" && task.status === "completed";
+  const hasDownload = isPptCompleted;
   const canPlay = task.type === "narration" && task.status === "completed" && !!onPlayNarration && !!parentTask;
   const canPreview = task.type === "ppt" && task.status === "completed" && !!onPreview;
   const canViewStyleExtraction = task.type === "ppt_style_extraction" && !!onViewStyleExtraction;
@@ -276,9 +286,9 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
   };
 
   const handleDownload = async () => {
-    if (resultData?.file_path) {
+    if (hasDownload) {
       try {
-        await downloadTaskFile(task.id, resultData.filename || "download");
+        await downloadTaskFile(task.id, typeof resultData?.filename === "string" ? resultData.filename : "download");
       } catch (err) {
         console.error("Download failed:", err);
       }
@@ -454,4 +464,3 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
     </>
   );
 }
-

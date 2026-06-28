@@ -2,7 +2,7 @@ import json
 import logging
 import re
 from mimetypes import guess_type
-from pathlib import Path
+from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
 from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
@@ -42,6 +42,7 @@ from src.limits import (
 )
 from src.managers.doc_manager import DuplicateDocumentError
 from src.storage.seeds import _BUILTIN_VOICES
+from src.url_utils import build_style_extraction_resource_url, build_style_resource_url
 
 logger = logging.getLogger(__name__)
 
@@ -127,6 +128,111 @@ class SaveTaskFileRequest(BaseModel):
     content: str
 
 
+def _parse_json_object(raw: str | dict | None) -> dict:
+    if isinstance(raw, dict):
+        return raw
+    if not raw:
+        return {}
+    try:
+        data = json.loads(raw)
+    except (json.JSONDecodeError, TypeError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _sanitize_document(doc: dict) -> dict:
+    data = dict(doc)
+    data.pop("storage_path", None)
+    data.pop("content_hash", None)
+    return data
+
+
+def _sanitize_result_data(task_type: str, raw: str | dict | None) -> dict:
+    data = _parse_json_object(raw)
+    if not data:
+        return {}
+
+    if task_type == "ppt":
+        allowed = {
+            "filename",
+            "ppt_style",
+            "ppt_style_name",
+            "outline",
+            "error",
+        }
+        return {key: data[key] for key in allowed if key in data}
+
+    if task_type == "narration":
+        safe_slides = []
+        for slide in data.get("slides", []):
+            if not isinstance(slide, dict):
+                continue
+            safe_slide = {
+                key: slide[key]
+                for key in ("number", "title", "text")
+                if key in slide
+            }
+            safe_slide["has_audio"] = bool(slide.get("audio_path"))
+            safe_slides.append(safe_slide)
+        safe = {
+            key: data[key]
+            for key in ("language", "voice_id", "voice_name", "tts_progress", "tts_error")
+            if key in data
+        }
+        safe["slides"] = safe_slides
+        return safe
+
+    if task_type == "ppt_style_extraction":
+        allowed = {
+            "description",
+            "style_description",
+            "style_name",
+            "style_name_en",
+            "pptx_filename",
+            "progress_step",
+            "saved_style_id",
+            "error",
+        }
+        safe = {key: data[key] for key in allowed if key in data}
+        if data.get("preview_html_path"):
+            safe["has_preview"] = True
+        return safe
+
+    return {
+        key: value
+        for key, value in data.items()
+        if key
+        not in {
+            "storage_path",
+            "file_path",
+            "audio_path",
+            "text_file_path",
+            "preview_path",
+            "preview_html_path",
+            "pptx_storage_key",
+            "resource_prefix",
+            "resource_manifest",
+        }
+    }
+
+
+def _sanitize_task(task: dict) -> dict:
+    data = dict(task)
+    task_type = data.get("type", "")
+    data["result_data"] = _sanitize_result_data(task_type, data.get("result_data"))
+    if "children" in data:
+        data["children"] = [_sanitize_task(child) for child in data.get("children") or []]
+    return data
+
+
+def _sanitize_ppt_style(style: dict) -> dict:
+    data = dict(style)
+    data.pop("preview_path", None)
+    data.pop("resource_manifest", None)
+    data.pop("style_description", None)
+    return data
+
+
 @app.patch("/api/workspaces/{workspace_id}/thread")
 async def update_workspace_thread(workspace_id: str, req: UpdateThreadRequest):
     logger.info("[API] PATCH /api/workspaces/%s/thread thread_id=%s", workspace_id, req.thread_id)
@@ -209,14 +315,14 @@ async def upload_document(
         raise BizException(ERR_DOCUMENT_DUPLICATE_NAME, str(exc)) from exc
     background_tasks.add_task(doc_service.process_document, doc["id"])
     logger.info("[API] upload result: id=%s status=%s", doc["id"], doc["status"])
-    return success_response(doc)
+    return success_response(_sanitize_document(doc))
 
 
 @app.get("/api/workspaces/{workspace_id}/documents")
 async def list_documents(workspace_id: str):
     logger.info("[API] GET /api/workspaces/%s/documents", workspace_id)
     data = await db.list_documents(workspace_id)
-    return success_response(data)
+    return success_response([_sanitize_document(doc) for doc in data])
 
 
 @app.delete("/api/workspaces/{workspace_id}/documents/{doc_id}")
@@ -233,7 +339,7 @@ async def delete_document(workspace_id: str, doc_id: str):
 async def list_tasks(workspace_id: str):
     logger.info("[API] GET /api/workspaces/%s/tasks", workspace_id)
     data = await db.list_tasks(workspace_id)
-    return success_response(data)
+    return success_response([_sanitize_task(task) for task in data])
 
 
 @app.delete("/api/workspaces/{workspace_id}/tasks/{task_id}")
@@ -335,7 +441,7 @@ async def get_task(workspace_id: str, task_id: str):
     task = await db.get_task(task_id)
     if not task:
         raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
-    return success_response(task)
+    return success_response(_sanitize_task(task))
 
 
 @app.delete("/api/workspaces/{workspace_id}/style-extraction/{task_id}")
@@ -391,7 +497,7 @@ async def list_ppt_styles(user_id: str = Query(default="")):
     if user_id:
         user_ids.append(user_id)
     data = await db.list_all_ppt_styles(user_ids)
-    return success_response(data)
+    return success_response([_sanitize_ppt_style(style) for style in data])
 
 
 @app.get("/api/voices")
@@ -474,6 +580,59 @@ def _apply_thumb_transforms(html_text: str) -> str:
     return html_text
 
 
+def _resource_replacements_from_manifest(raw_manifest: str | list | None, url_builder) -> list[tuple[str, str]]:
+    if isinstance(raw_manifest, str):
+        try:
+            manifest = json.loads(raw_manifest)
+        except (json.JSONDecodeError, TypeError):
+            manifest = []
+    elif isinstance(raw_manifest, list):
+        manifest = raw_manifest
+    else:
+        manifest = []
+
+    replacements: list[tuple[str, str]] = []
+    for item in manifest:
+        if not isinstance(item, dict):
+            continue
+        old_url = item.get("url")
+        filename = item.get("filename")
+        if isinstance(old_url, str) and isinstance(filename, str) and old_url:
+            replacements.append((old_url, url_builder(filename)))
+    return replacements
+
+
+def _resource_path(prefix: str, filename: str) -> str:
+    relative = PurePosixPath(filename)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise HTTPException(status_code=400, detail="Invalid resource path")
+    return str(PurePosixPath(prefix.rstrip("/")) / "resource" / relative)
+
+
+async def _serve_html_file(
+    file_path: str,
+    *,
+    replacements: list[tuple[str, str]] | None = None,
+    thumb: int = 0,
+):
+    if not await file_store.exists(file_path):
+        raise HTTPException(status_code=404, detail="File not found")
+    html_text = (await file_store.read(file_path)).decode("utf-8", errors="replace")
+    for old, new in replacements or []:
+        html_text = html_text.replace(old, new)
+    if thumb:
+        html_text = _apply_thumb_transforms(html_text)
+    return Response(
+        content=html_text,
+        media_type="text/html; charset=utf-8",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
 async def _serve_file(file_path: str, disposition: str, thumb: int = 0):
     """Unified file serving via FileStore (local / OSS transparent).
 
@@ -524,6 +683,34 @@ async def _serve_file(file_path: str, disposition: str, thumb: int = 0):
     )
 
 
+def _get_task_file_path(task: dict, key: str = "file_path") -> str:
+    result_data = _parse_json_object(task.get("result_data"))
+    value = result_data.get(key, "")
+    return value if isinstance(value, str) else ""
+
+
+async def _get_completed_task(task_id: str, expected_type: str | None = None) -> dict:
+    task = await db.get_task(task_id)
+    if not task:
+        raise HTTPException(status_code=404, detail="Task not found")
+    if expected_type and task.get("type") != expected_type:
+        raise HTTPException(status_code=400, detail=f"Task is not {expected_type}")
+    if task.get("status") != "completed":
+        raise HTTPException(status_code=400, detail="Task is not completed")
+    return task
+
+
+@app.get("/api/tasks/{task_id}/preview")
+async def preview_task_file(task_id: str, thumb: int = Query(default=0)):
+    """Preview a completed PPT task by task id without exposing storage paths."""
+    logger.info("[API] GET /api/tasks/%s/preview thumb=%s", task_id, thumb)
+    task = await _get_completed_task(task_id, expected_type="ppt")
+    file_path = _get_task_file_path(task)
+    if not file_path:
+        raise HTTPException(status_code=404, detail="No previewable file for this task")
+    return await _serve_file(file_path, disposition="inline", thumb=thumb)
+
+
 @app.get("/api/tasks/{task_id}/download")
 async def download_task_file(task_id: str):
     """Download the output file of a task (Content-Disposition: attachment).
@@ -532,16 +719,92 @@ async def download_task_file(task_id: str):
     from the task's result_data, keeping storage details encapsulated.
     """
     logger.info("[API] GET /api/tasks/%s/download", task_id)
-    task = await db.get_task(task_id)
-    if not task:
-        raise HTTPException(status_code=404, detail="Task not found")
-    result_data = json.loads(task.get("result_data") or "{}")
-    if not isinstance(result_data, dict):
-        result_data = {}
-    file_path = result_data.get("file_path")
+    task = await _get_completed_task(task_id, expected_type="ppt")
+    file_path = _get_task_file_path(task)
     if not file_path:
         raise HTTPException(status_code=404, detail="No downloadable file for this task")
     return await _serve_file(file_path, disposition="attachment")
+
+
+@app.get("/api/tasks/{task_id}/audio/{slide_number}")
+async def preview_task_audio(task_id: str, slide_number: int):
+    """Preview/play a narration slide audio by task id and slide number."""
+    logger.info("[API] GET /api/tasks/%s/audio/%s", task_id, slide_number)
+    task = await _get_completed_task(task_id, expected_type="narration")
+    result_data = _parse_json_object(task.get("result_data"))
+    for slide in result_data.get("slides", []):
+        if isinstance(slide, dict) and slide.get("number") == slide_number:
+            audio_path = slide.get("audio_path")
+            if audio_path:
+                return await _serve_file(audio_path, disposition="inline")
+            break
+    raise HTTPException(status_code=404, detail="Audio not found")
+
+
+@app.get("/api/tasks/{task_id}/audio/{slide_number}/download")
+async def download_task_audio(task_id: str, slide_number: int):
+    """Download a narration slide audio by task id and slide number."""
+    logger.info("[API] GET /api/tasks/%s/audio/%s/download", task_id, slide_number)
+    task = await _get_completed_task(task_id, expected_type="narration")
+    result_data = _parse_json_object(task.get("result_data"))
+    for slide in result_data.get("slides", []):
+        if isinstance(slide, dict) and slide.get("number") == slide_number:
+            audio_path = slide.get("audio_path")
+            if audio_path:
+                return await _serve_file(audio_path, disposition="attachment")
+            break
+    raise HTTPException(status_code=404, detail="Audio not found")
+
+
+@app.get("/api/tasks/{task_id}/narration-text")
+async def preview_narration_text(task_id: str):
+    """Preview narration markdown text by narration task id."""
+    logger.info("[API] GET /api/tasks/%s/narration-text", task_id)
+    task = await _get_completed_task(task_id, expected_type="narration")
+    text_path = _get_task_file_path(task, key="text_file_path")
+    if not text_path:
+        raise HTTPException(status_code=404, detail="Narration text not found")
+    return await _serve_file(text_path, disposition="inline")
+
+
+@app.get("/api/tasks/{task_id}/narration-text/download")
+async def download_narration_text(task_id: str):
+    """Download narration markdown text by narration task id."""
+    logger.info("[API] GET /api/tasks/%s/narration-text/download", task_id)
+    task = await _get_completed_task(task_id, expected_type="narration")
+    text_path = _get_task_file_path(task, key="text_file_path")
+    if not text_path:
+        raise HTTPException(status_code=404, detail="Narration text not found")
+    return await _serve_file(text_path, disposition="attachment")
+
+
+@app.get("/api/tasks/{task_id}/style-preview")
+async def preview_style_extraction_task(task_id: str, thumb: int = Query(default=0)):
+    """Preview a completed style extraction task by task id."""
+    logger.info("[API] GET /api/tasks/%s/style-preview thumb=%s", task_id, thumb)
+    task = await _get_completed_task(task_id, expected_type="ppt_style_extraction")
+    preview_path = _get_task_file_path(task, key="preview_html_path")
+    if not preview_path:
+        raise HTTPException(status_code=404, detail="Style preview not found")
+    result_data = _parse_json_object(task.get("result_data"))
+    replacements = _resource_replacements_from_manifest(
+        result_data.get("resource_manifest"),
+        lambda filename: build_style_extraction_resource_url(task_id, filename),
+    )
+    return await _serve_html_file(preview_path, replacements=replacements, thumb=thumb)
+
+
+@app.get("/api/tasks/{task_id}/style-resource/{filename:path}")
+async def preview_style_extraction_resource(task_id: str, filename: str):
+    """Serve a style extraction resource by task id and resource filename."""
+    logger.info("[API] GET /api/tasks/%s/style-resource/%s", task_id, filename)
+    task = await _get_completed_task(task_id, expected_type="ppt_style_extraction")
+    result_data = _parse_json_object(task.get("result_data"))
+    resource_prefix = result_data.get("resource_prefix", "")
+    if not isinstance(resource_prefix, str) or not resource_prefix:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    resource_path = _resource_path(resource_prefix, filename)
+    return await _serve_file(resource_path, disposition="inline")
 
 
 @app.get("/api/files/{file_path:path}")
@@ -551,7 +814,7 @@ async def download_file(file_path: str):
     For inline preview, use GET /api/file-view/{file_path} instead.
     """
     logger.info("[API] GET /api/files/%s", file_path)
-    return await _serve_file(file_path, disposition="attachment")
+    raise HTTPException(status_code=410, detail="Path-based file access is disabled")
 
 
 @app.get("/api/file-view/{file_path:path}")
@@ -561,7 +824,7 @@ async def view_file(file_path: str, thumb: int = Query(default=0)):
     When thumb=1 and file is HTML, external font <link> tags are stripped.
     """
     logger.info("[API] GET /api/file-view/%s thumb=%s", file_path, thumb)
-    return await _serve_file(file_path, disposition="inline", thumb=thumb)
+    raise HTTPException(status_code=410, detail="Path-based file access is disabled")
 
 
 # --- Static assets for PPT skill ---
@@ -578,6 +841,64 @@ for mount_path, directory in _static_mounts.items():
         logger.warning("[API] static directory missing, skip mount: %s", directory)
 
 
+@app.get("/api/ppt-styles/{style_id}/preview")
+async def preview_ppt_style_by_id(style_id: str, thumb: int = Query(default=0)):
+    """Serve PPT style preview by style id without exposing preview_path."""
+    logger.info("[API] GET /api/ppt-styles/%s/preview thumb=%s", style_id, thumb)
+    style = await db.get_ppt_style(style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+
+    preview_path = style.get("preview_path", "")
+    if not preview_path:
+        raise HTTPException(status_code=404, detail="Preview file not found")
+
+    builtin_dir = _static_dir / "ppt-styles"
+    if style.get("user_id") == "system":
+        resolved = builtin_dir / preview_path
+        if not resolved.exists():
+            raise HTTPException(status_code=404, detail="Preview file not found")
+        html_text = resolved.read_text(encoding="utf-8")
+    else:
+        if not await file_store.exists(preview_path):
+            raise HTTPException(status_code=404, detail="Preview file not found")
+        html_text = (await file_store.read(preview_path)).decode("utf-8", errors="replace")
+        replacements = _resource_replacements_from_manifest(
+            style.get("resource_manifest"),
+            lambda filename: build_style_resource_url(style_id, filename),
+        )
+        for old, new in replacements:
+            html_text = html_text.replace(old, new)
+
+    if thumb:
+        html_text = _apply_thumb_transforms(html_text)
+    return Response(
+        content=html_text,
+        media_type="text/html; charset=utf-8",
+        headers={
+            "Content-Disposition": "inline",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Pragma": "no-cache",
+        },
+    )
+
+
+@app.get("/api/ppt-styles/{style_id}/resource/{filename:path}")
+async def preview_ppt_style_resource(style_id: str, filename: str):
+    """Serve a custom style resource by style id and resource filename."""
+    logger.info("[API] GET /api/ppt-styles/%s/resource/%s", style_id, filename)
+    style = await db.get_ppt_style(style_id)
+    if not style:
+        raise HTTPException(status_code=404, detail="Style not found")
+    if style.get("user_id") == "system":
+        raise HTTPException(status_code=404, detail="Resource not found")
+    preview_path = style.get("preview_path", "")
+    if not preview_path:
+        raise HTTPException(status_code=404, detail="Resource not found")
+    resource_path = _resource_path(str(PurePosixPath(preview_path).parent), filename)
+    return await _serve_file(resource_path, disposition="inline")
+
+
 @app.get("/api/ppt-style-preview/{preview_path:path}")
 async def preview_ppt_style(preview_path: str, thumb: int = Query(default=0)):
     """Serve PPT style preview HTML for both system and custom styles.
@@ -586,6 +907,7 @@ async def preview_ppt_style(preview_path: str, thumb: int = Query(default=0)):
     - Custom styles: served inline via FileStore (local or OSS)
     """
     logger.info("[API] GET /api/ppt-style-preview/%s thumb=%s", preview_path, thumb)
+    raise HTTPException(status_code=410, detail="Path-based style preview is disabled")
     builtin_dir = _static_dir / "ppt-styles"
 
     # System styles: plain filename (no path separator)
