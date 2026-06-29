@@ -73,13 +73,11 @@ export default function Home() {
       {/* Header */}
       <header className="flex items-center justify-between border-b border-border px-8 py-4">
         <div className="flex items-center gap-2.5">
-          <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-accent/20">
-            <svg viewBox="0 0 120 120" className="h-5 w-5" aria-hidden="true">
-              <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round" className="text-accent"/>
-              <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round"/>
-              <circle cx="60" cy="62" r="4" fill="currentColor" className="text-accent"/>
-            </svg>
-          </div>
+          <svg viewBox="0 0 120 120" className="h-7 w-7 text-logo-primary" aria-hidden="true">
+            <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round"/>
+            <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round"/>
+            <circle cx="60" cy="62" r="4" fill="currentColor"/>
+          </svg>
           <h1 className="text-lg font-semibold text-foreground">
             RumiAI
           </h1>
@@ -107,7 +105,7 @@ export default function Home() {
             </div>
           ) : workspaces.length === 0 ? (
             <div className="flex flex-col items-center gap-4 py-20 text-muted-foreground">
-              <svg viewBox="0 0 120 120" className="h-12 w-12" aria-hidden="true">
+              <svg viewBox="0 0 120 120" className="h-12 w-12 text-logo-primary" aria-hidden="true">
                 <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round"/>
                 <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="3" fill="none" strokeLinecap="round"/>
                 <circle cx="60" cy="62" r="4" fill="currentColor"/>

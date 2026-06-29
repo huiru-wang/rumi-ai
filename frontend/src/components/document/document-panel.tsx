@@ -3,7 +3,6 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import {
   FileText,
-  Upload,
   Trash2,
   CheckCircle,
   Loader2,
@@ -126,26 +125,6 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
       {/* Header */}
       <div className="flex items-center justify-between border-b border-border px-4 py-3">
         <h3 className="text-sm font-medium text-foreground">📚 知识库</h3>
-        <button
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          className="flex items-center gap-1 rounded-md px-2 py-1 text-xs text-accent transition-colors hover:bg-accent/10 disabled:opacity-50"
-        >
-          {uploading ? (
-            <Loader2 size={13} className="animate-spin" />
-          ) : (
-            <Upload size={13} />
-          )}
-          上传
-        </button>
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          accept=".pdf,.docx,.doc,.md,.txt"
-          onChange={handleUpload}
-          className="hidden"
-        />
       </div>
 
       {/* Upload error toast */}
@@ -164,12 +143,31 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
 
       {/* Document List */}
       <div className="flex-1 overflow-y-auto p-3">
+        {/* Upload Card */}
+        <button
+          onClick={() => fileInputRef.current?.click()}
+          disabled={uploading}
+          className="mb-3 flex w-full items-center justify-center rounded-lg border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
+        >
+          {uploading ? "上传中..." : "+ 上传文档"}
+          <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+            PDF / Word / Markdown / TXT
+          </span>
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept=".pdf,.docx,.doc,.md,.txt"
+          onChange={handleUpload}
+          className="hidden"
+        />
+
+        {/* File list */}
         {documents.length === 0 ? (
-          <div className="flex flex-col items-center gap-2 py-12 text-center text-muted-foreground">
-            <FileText size={28} strokeWidth={1} />
-            <p className="text-xs">
-              上传 PDF、Word 或 Markdown 文档
-            </p>
+          <div className="flex flex-col items-center gap-2 py-8 text-center text-muted-foreground">
+            <FileText size={24} strokeWidth={1} />
+            <p className="text-xs">暂无文档</p>
           </div>
         ) : (
           <div className="flex flex-col gap-1.5">

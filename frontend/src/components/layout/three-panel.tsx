@@ -75,7 +75,7 @@ export function ThreePanel({ left, center, right, rightCollapsed = false, onRigh
   return (
     <div ref={containerRef} className="flex h-full w-full overflow-hidden">
       {/* Left Panel */}
-       <div
+      <div
         className="shrink-0 overflow-y-auto border-r border-border"
         style={{ width: leftWidth }}
       >

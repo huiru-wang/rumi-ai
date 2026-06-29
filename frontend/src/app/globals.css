@@ -13,6 +13,7 @@
   --destructive: #dc2626;
   --ring: #b8763e;
   --prose-tr-even: rgba(0, 0, 0, 0.02);
+  --logo-primary: #2C1810;
 }
 
 /* 午夜主题 */
@@ -27,6 +28,7 @@
   --destructive: #ef4444;
   --ring: #ffffff;
   --prose-tr-even: rgba(255, 255, 255, 0.02);
+  --logo-primary: #f5e6d3;
 }
 
 @theme inline {
@@ -39,6 +41,7 @@
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
   --color-ring: var(--ring);
+  --color-logo-primary: var(--logo-primary);
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
 }
@@ -214,4 +217,15 @@ body {
 }
 ::-webkit-scrollbar-thumb:hover {
   background: var(--muted-foreground);
+}
+
+/* --- Mobile Drawer Animations --- */
+@keyframes slide-in-left {
+  from { transform: translateX(-100%); }
+  to { transform: translateX(0); }
+}
+
+@keyframes slide-in-right {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
 }

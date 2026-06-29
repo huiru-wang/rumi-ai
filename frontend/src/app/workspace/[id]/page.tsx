@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { useParams, useRouter } from "next/navigation";
-import { ArrowLeft, Bot, Mic } from "lucide-react";
+import { ArrowLeft, FileText, Mic, Package } from "lucide-react";
 import { getWorkspace, listPptStyles, listVoices, type Workspace, type Task, type PptStyleInfo, type VoiceInfo } from "@/lib/api";
 import { ThreePanel } from "@/components/layout/three-panel";
 import { ChatPanel } from "@/components/chat/chat-panel";
@@ -21,6 +21,8 @@ export default function WorkspacePage() {
   const workspaceId = params.id as string;
   const [workspace, setWorkspace] = useState<Workspace | null>(null);
   const [rightCollapsed, setRightCollapsed] = useState(false);
+  const [leftDrawerOpen, setLeftDrawerOpen] = useState(false);
+  const [rightDrawerOpen, setRightDrawerOpen] = useState(false);
   const [pptStyle, setPptStyle] = useState("sys-swiss-modern");
   const [voiceId, setVoiceId] = useState("Cherry");
   const [currentPptTaskId, setCurrentPptTaskId] = useState("");
@@ -91,6 +93,18 @@ export default function WorkspacePage() {
     }
   }, [workspace]);
 
+  // Mobile drawer: body scroll lock + ESC close
+  useEffect(() => {
+    const anyOpen = leftDrawerOpen || rightDrawerOpen;
+    document.body.style.overflow = anyOpen ? "hidden" : "";
+    if (!anyOpen) return;
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") { setLeftDrawerOpen(false); setRightDrawerOpen(false); }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => { document.body.style.overflow = ""; document.removeEventListener("keydown", handleKey); };
+  }, [leftDrawerOpen, rightDrawerOpen]);
+
   if (!workspace) {
     return (
       <div className="flex h-screen items-center justify-center text-muted-foreground">
@@ -127,19 +141,39 @@ export default function WorkspacePage() {
         >
           <ArrowLeft size={18} />
         </button>
-        <div className="flex items-center gap-2">
-          <Bot size={16} className="text-accent" />
-          <span className="text-sm font-medium text-foreground">
+        {/* Mobile: left drawer button */}
+        <button
+          onClick={() => { setRightDrawerOpen(false); setLeftDrawerOpen(true); }}
+          className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+          title="知识库"
+        >
+          <FileText size={16} />
+        </button>
+        <div className="flex min-w-0 items-center gap-2">
+          <svg viewBox="0 0 120 120" className="h-4.5 w-4.5 shrink-0 text-logo-primary" aria-hidden="true">
+            <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round"/>
+            <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round"/>
+            <circle cx="60" cy="62" r="4" fill="currentColor"/>
+          </svg>
+          <span className="truncate text-sm font-medium text-foreground">
             {workspace.name}
           </span>
         </div>
-        <div className="ml-auto">
+        <div className="ml-auto flex items-center gap-1">
+          {/* Mobile: right drawer button */}
+          <button
+            onClick={() => { setLeftDrawerOpen(false); setRightDrawerOpen(true); }}
+            className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground md:hidden"
+            title="配置与产出"
+          >
+            <Package size={16} />
+          </button>
           <ThemeToggle />
         </div>
       </header>
 
-      {/* Three-Panel Layout */}
-      <div className="flex-1 overflow-hidden">
+      {/* Desktop: Three-Panel Layout */}
+      <div className="hidden flex-1 overflow-hidden md:block">
         <ThreePanel
           left={<DocumentPanel workspaceId={workspaceId} />}
           center={<ChatPanel workspaceId={workspaceId} pptStyle={pptStyle} voiceId={voiceId} currentPptTaskId={currentPptTaskId} onPptTaskIdConsumed={handlePptTaskIdConsumed} externalCommand={externalCommand} onExternalCommandConsumed={handleExternalCommandConsumed} />}
@@ -148,6 +182,31 @@ export default function WorkspacePage() {
           onRightToggle={() => setRightCollapsed((v) => !v)}
         />
       </div>
+
+      {/* Mobile: Chat only */}
+      <div className="flex-1 overflow-hidden md:hidden">
+        <ChatPanel workspaceId={workspaceId} pptStyle={pptStyle} voiceId={voiceId} currentPptTaskId={currentPptTaskId} onPptTaskIdConsumed={handlePptTaskIdConsumed} externalCommand={externalCommand} onExternalCommandConsumed={handleExternalCommandConsumed} />
+      </div>
+
+      {/* Mobile: Left drawer (knowledge base) */}
+      {leftDrawerOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setLeftDrawerOpen(false)} />
+          <div className="absolute inset-y-0 left-0 w-[85vw] max-w-[360px] border-r border-border bg-background shadow-xl animate-[slide-in-left_0.25s_ease-out]">
+            <DocumentPanel workspaceId={workspaceId} />
+          </div>
+        </div>
+      )}
+
+      {/* Mobile: Right drawer (config & output) */}
+      {rightDrawerOpen && (
+        <div className="fixed inset-0 z-40 md:hidden">
+          <div className="absolute inset-0 bg-black/40" onClick={() => setRightDrawerOpen(false)} />
+          <div className="absolute inset-y-0 right-0 w-[85vw] max-w-[360px] border-l border-border bg-background shadow-xl animate-[slide-in-right_0.25s_ease-out]">
+            {rightPanel}
+          </div>
+        </div>
+      )}
 
       {/* PPT Player Dialog */}
       {playerData && (
