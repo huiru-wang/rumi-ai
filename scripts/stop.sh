@@ -38,29 +38,70 @@ FRONTEND_PORT="${FRONTEND_PORT:-3000}"
 BACKEND_PORT="${BACKEND_PORT:-8000}"
 LANGGRAPH_PORT="${LANGGRAPH_PORT:-2024}"
 CHROMA_PORT="${CHROMA_PORT:-8001}"
+TMP="$ROOT/tmp"
 
 warn "停止现有服务 ($APP_ENV)..."
 
-graceful_stop() {
-  local name=$1 port=$2
-  local pids
-  pids=$(lsof -ti:"$port" 2>/dev/null || true)
+is_running() {
+  local pid=$1
+  [ -n "$pid" ] && kill -0 "$pid" >/dev/null 2>&1
+}
+
+descendant_pids() {
+  local pid=$1
+  local children child
+
+  children=$(pgrep -P "$pid" 2>/dev/null || true)
+  for child in $children; do
+    echo "$child"
+    descendant_pids "$child"
+  done
+}
+
+stop_pids() {
+  local name=$1
+  local pids=$2
+
   if [ -n "$pids" ]; then
     echo "$pids" | xargs kill -TERM 2>/dev/null || true
     sleep 2
-    pids=$(lsof -ti:"$port" 2>/dev/null || true)
-    if [ -n "$pids" ]; then
-      echo "$pids" | xargs kill -9 2>/dev/null || true
-    fi
-    warn "已停止: $name (port $port)"
+    echo "$pids" | while read -r pid; do
+      if is_running "$pid"; then
+        kill -9 "$pid" 2>/dev/null || true
+      fi
+    done
+    warn "已停止: $name"
   fi
 }
 
-graceful_stop "后端 API" "$BACKEND_PORT"
-graceful_stop "LangGraph" "$LANGGRAPH_PORT"
-graceful_stop "ChromaDB" "$CHROMA_PORT"
-graceful_stop "前端" "$FRONTEND_PORT"
+graceful_stop() {
+  local name=$1 port=$2 pid_file=$3
+  local root_pid pids
 
-rm -f "$ROOT/tmp/"*.${APP_ENV}.pid
+  if [ -f "$pid_file" ]; then
+    root_pid=$(cat "$pid_file" 2>/dev/null || true)
+    if is_running "$root_pid"; then
+      pids=$(
+        {
+          echo "$root_pid"
+          descendant_pids "$root_pid"
+        } | awk 'NF && !seen[$0]++'
+      )
+      stop_pids "$name (pid $root_pid)" "$pids"
+    fi
+  fi
+
+  pids=$(lsof -tiTCP:"$port" -sTCP:LISTEN 2>/dev/null || true)
+  if [ -n "$pids" ]; then
+    stop_pids "$name (port $port)" "$pids"
+  fi
+}
+
+graceful_stop "后端 API" "$BACKEND_PORT" "$TMP/backend.${APP_ENV}.pid"
+graceful_stop "LangGraph" "$LANGGRAPH_PORT" "$TMP/langgraph.${APP_ENV}.pid"
+graceful_stop "ChromaDB" "$CHROMA_PORT" "$TMP/chromadb.${APP_ENV}.pid"
+graceful_stop "前端" "$FRONTEND_PORT" "$TMP/frontend.${APP_ENV}.pid"
+
+rm -f "$TMP/"*.${APP_ENV}.pid
 
 warn "全部服务已停止 ($APP_ENV)"

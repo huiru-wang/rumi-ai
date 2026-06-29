@@ -192,7 +192,7 @@ cd frontend && pnpm lint && pnpm build
 # 开发环境：前端 3000，后端服务对本机/局域网开放，启用 reload/dev server
 ./scripts/start.sh dev
 
-# 生产环境：前端 3001，内部服务绑定 127.0.0.1，由 Nginx 反代 rumi.robinverse.me
+# 生产环境：前端 3000，内部服务绑定 127.0.0.1，由 Nginx 反代 rumi.robinverse.me
 cp backend/.env.production.example backend/.env.production
 # 编辑 backend/.env.production，填入生产 API Key / OSS / DATA_DIR 等配置
 ./scripts/doctor.sh prod
@@ -212,7 +212,7 @@ NEXT_PUBLIC_LANGGRAPH_API_URL=https://rumi.robinverse.me/lg
 
 | 服务 | 端口 | 暴露方式 |
 |------|-----:|----------|
-| Next.js Frontend | 3001 | Nginx `/` 反代 |
+| Next.js Frontend | 3000 | Nginx `/` 反代 |
 | FastAPI Backend | 8000 | Nginx `/api/` 反代 |
 | LangGraph Server | 2024 | Nginx `/lg/` 反代 |
 | ChromaDB | 8001 | 仅本机访问，不开放公网 |
