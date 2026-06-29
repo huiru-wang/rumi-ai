@@ -95,8 +95,7 @@ async def _create_completed_narration(db, store, workspace_id, ppt_task):
     return task
 
 
-async def test_create_ppt_share_returns_public_url_without_paths(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIC_WEB_BASE", "https://app.example.com")
+async def test_create_ppt_share_returns_token_without_public_url_or_paths(tmp_path, monkeypatch):
     db, store, workspace_id = await _make_store(tmp_path, monkeypatch)
     ppt = await _create_completed_ppt(db, store, workspace_id)
 
@@ -104,13 +103,13 @@ async def test_create_ppt_share_returns_public_url_without_paths(tmp_path, monke
 
     assert data["enabled"] is True
     assert data["type"] == "ppt"
-    assert data["url"].startswith("https://app.example.com/share/")
+    assert data["token"]
+    assert "url" not in data
+    assert "path" not in data
     _assert_no_storage_paths(data)
 
 
 async def test_public_ppt_share_detail_and_html_are_readonly_and_pathless(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIC_WEB_BASE", "https://app.example.com")
-    monkeypatch.setenv("PUBLIC_API_BASE", "https://api.example.com")
     db, store, workspace_id = await _make_store(tmp_path, monkeypatch)
     ppt = await _create_completed_ppt(db, store, workspace_id)
     share = _payload(await routes.create_task_share(ppt["id"]))
@@ -119,14 +118,12 @@ async def test_public_ppt_share_detail_and_html_are_readonly_and_pathless(tmp_pa
     html = await routes.preview_share_ppt(share["token"])
 
     assert detail["type"] == "ppt"
-    assert detail["ppt"]["html_url"] == f"https://api.example.com/api/shares/{share['token']}/ppt"
+    assert detail["ppt"]["html_url"] == f"/api/shares/{share['token']}/ppt"
     assert b"Shared PPT" in html.body
     _assert_no_storage_paths(detail)
 
 
 async def test_public_narration_share_detail_and_audio_are_pathless(tmp_path, monkeypatch):
-    monkeypatch.setenv("PUBLIC_WEB_BASE", "https://app.example.com")
-    monkeypatch.setenv("PUBLIC_API_BASE", "https://api.example.com")
     db, store, workspace_id = await _make_store(tmp_path, monkeypatch)
     ppt = await _create_completed_ppt(db, store, workspace_id)
     narration = await _create_completed_narration(db, store, workspace_id, ppt)
@@ -136,8 +133,8 @@ async def test_public_narration_share_detail_and_audio_are_pathless(tmp_path, mo
     audio = await routes.preview_share_audio(share["token"], 1)
 
     assert detail["type"] == "narration"
-    assert detail["ppt"]["html_url"] == f"https://api.example.com/api/shares/{share['token']}/ppt"
-    assert detail["narration"]["slides"][0]["audio_url"] == f"https://api.example.com/api/shares/{share['token']}/audio/1"
+    assert detail["ppt"]["html_url"] == f"/api/shares/{share['token']}/ppt"
+    assert detail["narration"]["slides"][0]["audio_url"] == f"/api/shares/{share['token']}/audio/1"
     assert audio.body == b"audio-bytes"
     _assert_no_storage_paths(detail)
 

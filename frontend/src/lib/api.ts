@@ -39,6 +39,27 @@ async function request<T>(
   return body.data;
 }
 
+function getWebOrigin(): string {
+  if (typeof window !== "undefined" && window.location?.origin) {
+    return window.location.origin;
+  }
+  return "http://localhost:3000";
+}
+
+function toApiUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+  return `${API_BASE}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
+}
+
+function toWebUrl(pathOrUrl: string): string {
+  if (/^https?:\/\//i.test(pathOrUrl)) {
+    return pathOrUrl;
+  }
+  return `${getWebOrigin()}${pathOrUrl.startsWith("/") ? pathOrUrl : `/${pathOrUrl}`}`;
+}
+
 // --- Workspace ---
 
 export interface Workspace {
@@ -232,18 +253,32 @@ export function saveTaskFile(
 export interface TaskShareInfo {
   enabled: boolean;
   token: string | null;
+  path?: string | null;
   url: string | null;
   type: string | null;
 }
 
-export function getTaskShare(taskId: string): Promise<TaskShareInfo> {
-  return request(`/api/tasks/${encodeURIComponent(taskId)}/share`);
+function withShareUrl(share: TaskShareInfo): TaskShareInfo {
+  if (!share.enabled || !share.token) {
+    return { ...share, url: null };
+  }
+  return {
+    ...share,
+    path: share.path || `/share/${encodeURIComponent(share.token)}`,
+    url: toWebUrl(share.path || `/share/${encodeURIComponent(share.token)}`),
+  };
 }
 
-export function createTaskShare(taskId: string): Promise<TaskShareInfo> {
-  return request(`/api/tasks/${encodeURIComponent(taskId)}/share`, {
-    method: "POST",
-  });
+export async function getTaskShare(taskId: string): Promise<TaskShareInfo> {
+  return withShareUrl(await request(`/api/tasks/${encodeURIComponent(taskId)}/share`));
+}
+
+export async function createTaskShare(taskId: string): Promise<TaskShareInfo> {
+  return withShareUrl(
+    await request(`/api/tasks/${encodeURIComponent(taskId)}/share`, {
+      method: "POST",
+    })
+  );
 }
 
 export function deleteTaskShare(taskId: string): Promise<{ ok: boolean; revoked: number }> {
@@ -379,8 +414,27 @@ export interface ShareDetail {
   };
 }
 
-export function getShareDetail(token: string): Promise<ShareDetail> {
-  return request(`/api/shares/${encodeURIComponent(token)}`);
+function withShareDetailUrls(detail: ShareDetail): ShareDetail {
+  return {
+    ...detail,
+    ppt: {
+      ...detail.ppt,
+      html_url: toApiUrl(detail.ppt.html_url),
+    },
+    narration: detail.narration
+      ? {
+          ...detail.narration,
+          slides: detail.narration.slides.map((slide) => ({
+            ...slide,
+            audio_url: slide.audio_url ? toApiUrl(slide.audio_url) : slide.audio_url,
+          })),
+        }
+      : detail.narration,
+  };
+}
+
+export async function getShareDetail(token: string): Promise<ShareDetail> {
+  return withShareDetailUrls(await request(`/api/shares/${encodeURIComponent(token)}`));
 }
 
 /**

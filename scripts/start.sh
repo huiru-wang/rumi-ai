@@ -98,13 +98,10 @@ CHROMA_BIND_HOST="${CHROMA_BIND_HOST:-0.0.0.0}"
 CHROMA_HOST="${CHROMA_HOST:-localhost}"
 CHROMA_PORT="${CHROMA_PORT:-8001}"
 DATA_DIR="${DATA_DIR:-./data}"
-PUBLIC_API_BASE="${PUBLIC_API_BASE:-${NEXT_PUBLIC_API_BASE:-http://localhost:$BACKEND_PORT}}"
-PUBLIC_WEB_BASE="${PUBLIC_WEB_BASE:-http://localhost:$FRONTEND_PORT}"
 npm_config_registry="${npm_config_registry:-${NPM_CONFIG_REGISTRY:-}}"
 NPM_CONFIG_REGISTRY="${NPM_CONFIG_REGISTRY:-${npm_config_registry:-}}"
 UV_INDEX_URL="${UV_INDEX_URL:-}"
 UV_EXTRA_INDEX_URL="${UV_EXTRA_INDEX_URL:-}"
-export PUBLIC_API_BASE PUBLIC_WEB_BASE
 
 if [ -n "$npm_config_registry" ]; then
   export npm_config_registry NPM_CONFIG_REGISTRY

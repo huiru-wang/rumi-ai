@@ -45,7 +45,6 @@ from src.storage.seeds import _BUILTIN_VOICES
 from src.url_utils import (
     build_share_audio_url,
     build_share_ppt_url,
-    build_share_url,
     build_style_extraction_resource_url,
     build_style_resource_url,
 )
@@ -410,12 +409,11 @@ async def save_task_file(workspace_id: str, task_id: str, req: SaveTaskFileReque
 
 def _share_payload(share: dict | None) -> dict:
     if not share:
-        return {"enabled": False, "token": None, "url": None, "type": None}
+        return {"enabled": False, "token": None, "type": None}
     token = share["token"]
     return {
         "enabled": True,
         "token": token,
-        "url": build_share_url(token),
         "type": share.get("type"),
     }
 

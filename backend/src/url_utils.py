@@ -9,24 +9,14 @@ def get_public_api_base() -> str:
     return os.getenv("PUBLIC_API_BASE", "http://localhost:8000").rstrip("/")
 
 
-def get_public_web_base() -> str:
-    """Return the externally reachable frontend base URL."""
-    return os.getenv("PUBLIC_WEB_BASE", "http://localhost:3000").rstrip("/")
-
-
-def build_share_url(token: str) -> str:
-    """Build a public frontend share URL."""
-    return f"{get_public_web_base()}/share/{quote(token, safe='')}"
-
-
 def build_share_ppt_url(token: str) -> str:
-    """Build a public API URL for share PPT HTML."""
-    return f"{get_public_api_base()}/api/shares/{quote(token, safe='')}/ppt"
+    """Build a share PPT API path without assuming the public API origin."""
+    return f"/api/shares/{quote(token, safe='')}/ppt"
 
 
 def build_share_audio_url(token: str, slide_number: int) -> str:
-    """Build a public API URL for share narration audio."""
-    return f"{get_public_api_base()}/api/shares/{quote(token, safe='')}/audio/{slide_number}"
+    """Build a share narration audio API path without assuming the public API origin."""
+    return f"/api/shares/{quote(token, safe='')}/audio/{slide_number}"
 
 
 def build_style_resource_url(style_id: str, filename: str) -> str:
