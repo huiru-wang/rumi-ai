@@ -5,6 +5,7 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 BACKEND="$ROOT/backend"
 FRONTEND="$ROOT/frontend"
+SCRIPTS="$ROOT/scripts"
 
 export TZ=Asia/Shanghai
 
@@ -18,6 +19,24 @@ ok()   { echo -e "${GREEN}[ok]${NC} $1"; }
 warn() { echo -e "${YELLOW}[warn]${NC} $1"; }
 fail() { echo -e "${RED}[fail]${NC} $1"; }
 info() { echo -e "${GREEN}[init]${NC} $1"; }
+
+# 加载环境配置（镜像源、端口等）
+# 优先级: prod.env < dev.env < 已有环境变量
+ENV_FILE="${RUMI_ENV_FILE:-}"
+if [ -z "$ENV_FILE" ]; then
+  if [ -f "$SCRIPTS/config/prod.env" ] && [ "${APP_ENV:-}" = "prod" ]; then
+    ENV_FILE="$SCRIPTS/config/prod.env"
+  elif [ -f "$SCRIPTS/config/dev.env" ]; then
+    ENV_FILE="$SCRIPTS/config/dev.env"
+  fi
+fi
+if [ -n "$ENV_FILE" ] && [ -f "$ENV_FILE" ]; then
+  info "加载环境配置: $ENV_FILE"
+  set -a
+  # shellcheck disable=SC1090
+  source "$ENV_FILE"
+  set +a
+fi
 
 ERRORS=0
 
@@ -160,10 +179,29 @@ DATA_DIR="${DATA_DIR:-$BACKEND/data}"
 mkdir -p "$DATA_DIR/chroma" "$DATA_DIR/files"
 ok "数据目录已就绪: $DATA_DIR/{chroma,files}"
 
+# 安装系统编译依赖（部分 Python 包需要 C 扩展编译）
+if command -v apt-get >/dev/null 2>&1; then
+  NEED_BUILD=0
+  for pkg in build-essential python3-dev libffi-dev; do
+    if ! dpkg -s "$pkg" >/dev/null 2>&1; then
+      NEED_BUILD=1
+      break
+    fi
+  done
+  if [ "$NEED_BUILD" -eq 1 ]; then
+    info "安装系统编译依赖..."
+    sudo apt-get update -qq && sudo apt-get install -y -qq build-essential python3-dev libffi-dev >/dev/null 2>&1 || true
+  fi
+fi
+
 # 安装 Python 依赖
 info "安装 Python 依赖（uv sync）..."
 cd "$BACKEND"
-if uv sync --quiet 2>/dev/null || uv sync; then
+
+# 确保国内镜像源已配置（ECS 加速）
+export UV_INDEX_URL="${UV_INDEX_URL:-https://mirrors.aliyun.com/pypi/simple}"
+
+if uv sync 2>&1 | tail -5; then
   ok "Python 依赖安装完成"
 else
   fail "Python 依赖安装失败，请检查 pyproject.toml 和网络连接"
@@ -173,6 +211,10 @@ fi
 # 安装前端依赖
 info "安装前端依赖（${FRONTEND_RUNNER} install）..."
 cd "$FRONTEND"
+
+# 确保国内 npm 镜像已配置（ECS 加速）
+export npm_config_registry="${npm_config_registry:-https://registry.npmmirror.com}"
+
 if "$FRONTEND_RUNNER" install; then
   ok "前端依赖安装完成"
 else

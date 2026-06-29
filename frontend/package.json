@@ -8,6 +8,9 @@
     "start": "next start",
     "lint": "eslint"
   },
+  "pnpm": {
+    "onlyBuiltDependencies": ["sharp", "unrs-resolver"]
+  },
   "dependencies": {
     "@assistant-ui/react": "^0.14.11",
     "@assistant-ui/react-langchain": "^0.0.10",
