@@ -1,0 +1,123 @@
+/**
+ * @param {{ threadId: string | null; isInitialHistoryLoading: boolean }} state
+ */
+export function shouldUseLiveMessages(state) {
+  return !state.threadId || !state.isInitialHistoryLoading;
+}
+
+/**
+ * @template T
+ * @param {{
+ *   historyMessages: T[];
+ *   streamMessages: T[];
+ *   getMessageKey: (message: T) => string;
+ * }} input
+ * @returns {T[]}
+ */
+export function getLiveMessagesAfterHistory(input) {
+  const { historyMessages, streamMessages, getMessageKey } = input;
+  if (historyMessages.length === 0) return streamMessages;
+
+  const lastHistoryKey = getMessageKey(historyMessages[historyMessages.length - 1]);
+  const lastHistoryIndex = streamMessages.findIndex(
+    (message) => getMessageKey(message) === lastHistoryKey,
+  );
+
+  if (lastHistoryIndex < 0) return [];
+  return streamMessages.slice(lastHistoryIndex + 1);
+}
+
+/**
+ * @template T
+ * @param {{
+ *   isLoading: boolean;
+ *   historyMessages: T[];
+ *   streamMessages: T[];
+ *   liveMessages: T[];
+ *   nextDisplayedMessages: T[];
+ *   previousDisplayedMessages: T[];
+ *   getMessageKey: (message: T) => string;
+ * }} input
+ */
+export function shouldPreserveDisplayedMessages(input) {
+  if (input.isLoading) return false;
+  if (input.historyMessages.length === 0) return false;
+  if (input.streamMessages.length === 0) return false;
+  if (input.liveMessages.length > 0) return false;
+  if (input.previousDisplayedMessages.length <= input.nextDisplayedMessages.length) return false;
+
+  const lastHistoryKey = input.getMessageKey(input.historyMessages[input.historyMessages.length - 1]);
+  const hasHistoryAnchor = input.streamMessages.some(
+    (message) => input.getMessageKey(message) === lastHistoryKey,
+  );
+  return !hasHistoryAnchor;
+}
+
+/**
+ * @template T
+ * @param {{
+ *   phase: string;
+ *   threadId: string | null;
+ *   isLoading: boolean;
+ *   historyMessages: T[];
+ *   streamMessages: T[];
+ *   liveMessages: T[];
+ *   displayedMessages: T[];
+ *   optimisticMessages: T[];
+ *   getMessageKey: (message: T) => string;
+ * }} input
+ */
+export function createMessageDebugSnapshot(input) {
+  const lastHistoryMessage = input.historyMessages[input.historyMessages.length - 1];
+  const lastHistoryKey = lastHistoryMessage ? input.getMessageKey(lastHistoryMessage) : undefined;
+  const indexInStream = lastHistoryKey
+    ? input.streamMessages.findIndex((message) => input.getMessageKey(message) === lastHistoryKey)
+    : undefined;
+
+  return {
+    phase: input.phase,
+    threadId: input.threadId,
+    isLoading: input.isLoading,
+    history: summarizeMessageList(input.historyMessages),
+    stream: summarizeMessageList(input.streamMessages),
+    live: summarizeMessageList(input.liveMessages),
+    displayed: summarizeMessageList(input.displayedMessages),
+    optimistic: summarizeMessageList(input.optimisticMessages),
+    anchor: {
+      lastHistoryKey,
+      indexInStream,
+      reason: getAnchorReason(input.historyMessages, input.streamMessages, indexInStream),
+    },
+  };
+}
+
+function getAnchorReason(historyMessages, streamMessages, indexInStream) {
+  if (historyMessages.length === 0) return "no-history";
+  if (streamMessages.length === 0) return "no-stream";
+  if (indexInStream === -1) return "missing-history-anchor";
+  return "ok";
+}
+
+function summarizeMessageList(messages) {
+  return {
+    count: messages.length,
+    last: summarizeMessageForDebug(messages[messages.length - 1]),
+  };
+}
+
+function summarizeMessageForDebug(message) {
+  if (!message) return undefined;
+  return {
+    type: message?._getType?.() || message?.type || message?.role || "message",
+    id: message?.id || message?.message_id,
+    rowId: message?._rowId,
+    contentLength: getContentLength(message?.content),
+    toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls.length : 0,
+    name: message?.name,
+  };
+}
+
+function getContentLength(content) {
+  if (typeof content === "string") return content.length;
+  return JSON.stringify(content ?? "").length;
+}

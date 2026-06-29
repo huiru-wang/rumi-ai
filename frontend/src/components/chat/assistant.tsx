@@ -3,6 +3,12 @@
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
 import { updateWorkspaceThreadId, getWorkspace, listThreadMessages, type ThreadMessage } from "@/lib/api";
+import {
+  createMessageDebugSnapshot,
+  getLiveMessagesAfterHistory,
+  shouldPreserveDisplayedMessages,
+  shouldUseLiveMessages,
+} from "./message-display";
 
 const LANGGRAPH_API_URL =
   process.env.NEXT_PUBLIC_LANGGRAPH_API_URL || "http://localhost:2024";
@@ -100,12 +106,21 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
   const [historyMessages, setHistoryMessages] = useState<any[]>([]);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticHumanMessage[]>([]);
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
+  const [isInitialHistoryLoading, setIsInitialHistoryLoading] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const summarizedIds = useRef<Set<string>>(new Set());
 
   const loadHistoryMessages = useCallback(async (targetThreadId: string) => {
+    debugMessageLog("history-load-start", { threadId: targetThreadId });
     const page = await listThreadMessages(targetThreadId, { limit: MESSAGE_HISTORY_LIMIT });
-    setHistoryMessages(page.messages.map(toLangGraphMessage).filter((message) => !isHiddenMessage(message)));
+    const messages = page.messages.map(toLangGraphMessage).filter((message) => !isHiddenMessage(message));
+    debugMessageLog("history-load-success", {
+      threadId: targetThreadId,
+      count: messages.length,
+      last: summarizeMessageForLog(messages[messages.length - 1]),
+      nextCursor: page.next_cursor,
+    });
+    setHistoryMessages(messages);
     setHistoryNextCursor(page.next_cursor);
   }, []);
 
@@ -141,15 +156,23 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
     if (!threadId) {
       setHistoryMessages([]);
       setHistoryNextCursor(null);
+      setIsInitialHistoryLoading(false);
       return;
     }
     let cancelled = false;
-    loadHistoryMessages(threadId).catch(() => {
-      if (!cancelled) {
-        setHistoryMessages([]);
-        setHistoryNextCursor(null);
-      }
-    });
+    setIsInitialHistoryLoading(true);
+    loadHistoryMessages(threadId)
+      .catch(() => {
+        if (!cancelled) {
+          setHistoryMessages([]);
+          setHistoryNextCursor(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsInitialHistoryLoading(false);
+        }
+      });
     return () => { cancelled = true; };
   }, [threadId, loadHistoryMessages]);
 
@@ -251,7 +274,11 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         rafIdRef.current = null;
         const { messages: rawMsgs, isLoading: loading } = latestStreamRef.current;
         const cache = messageCacheRef.current;
-        const sm = rawMsgs ?? [];
+        const canUseLiveMessages = shouldUseLiveMessages({
+          threadId,
+          isInitialHistoryLoading,
+        });
+        const sm = canUseLiveMessages ? rawMsgs ?? [] : [];
 
         // 1) Filter hidden
         const visible = sm.filter((m: any) => !isHiddenMessage(m));
@@ -279,14 +306,30 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         }
 
         // 3) Filter against history (inline liveMessages)
-        const historyKeys = new Set(historyMessages.map(messageKey));
-        const live = stableMessages.filter((m: any) => !historyKeys.has(messageKey(m)));
+        const live = getLiveMessagesAfterHistory({
+          historyMessages,
+          streamMessages: stableMessages,
+          getMessageKey: messageKey,
+        });
         const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, stableMessages);
 
         // 4) Merge history + live + optimistic. Optimistic messages must be
         // appended after live stream messages because neither has a database
         // _rowId yet, and stable sorting preserves insertion order for them.
         const merged = mergeMessages(mergeMessages(historyMessages, live), optimistic);
+        debugMessageSnapshotLog("display-raf", () =>
+          createMessageDebugSnapshot({
+            phase: "display-raf",
+            threadId,
+            isLoading: loading,
+            historyMessages,
+            streamMessages: stableMessages,
+            liveMessages: live,
+            displayedMessages: merged,
+            optimisticMessages: optimistic,
+            getMessageKey: messageKey,
+          }),
+        );
 
         // 5) Skip update if content is identical (avoids redundant render)
         setDisplayMessages((prev) => {
@@ -318,12 +361,53 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         rafIdRef.current = null;
       }
       const { messages: rawMsgs } = latestStreamRef.current;
-      const sm = rawMsgs ?? [];
+      const canUseLiveMessages = shouldUseLiveMessages({
+        threadId,
+        isInitialHistoryLoading,
+      });
+      const sm = canUseLiveMessages ? rawMsgs ?? [] : [];
       const visible = sm.filter((m: any) => !isHiddenMessage(m));
-      const historyKeys = new Set(historyMessages.map(messageKey));
-      const live = visible.filter((m: any) => !historyKeys.has(messageKey(m)));
+      const live = getLiveMessagesAfterHistory({
+        historyMessages,
+        streamMessages: visible,
+        getMessageKey: messageKey,
+      });
       const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, visible);
-      setDisplayMessages(mergeMessages(mergeMessages(historyMessages, live), optimistic));
+      const merged = mergeMessages(mergeMessages(historyMessages, live), optimistic);
+      debugMessageLog("display-immediate", () =>
+        createMessageDebugSnapshot({
+          phase: "display-immediate",
+          threadId,
+          isLoading: stream.isLoading,
+          historyMessages,
+          streamMessages: visible,
+          liveMessages: live,
+          displayedMessages: merged,
+          optimisticMessages: optimistic,
+          getMessageKey: messageKey,
+        }),
+      );
+      setDisplayMessages((prev) => {
+        if (
+          shouldPreserveDisplayedMessages({
+            isLoading: stream.isLoading,
+            historyMessages,
+            streamMessages: visible,
+            liveMessages: live,
+            nextDisplayedMessages: merged,
+            previousDisplayedMessages: prev,
+            getMessageKey: messageKey,
+          })
+        ) {
+          debugMessageLog("display-preserve", {
+            reason: "missing-history-anchor-before-refresh",
+            previousCount: prev.length,
+            nextCount: merged.length,
+          });
+          return prev;
+        }
+        return merged;
+      });
     }
 
     return () => {
@@ -333,7 +417,38 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream.messages.length, stream.isLoading, historyMessages, optimisticMessages]);
+  }, [stream.messages.length, stream.isLoading, historyMessages, optimisticMessages, threadId, isInitialHistoryLoading]);
+
+  const wasLoadingRef = useRef(stream.isLoading);
+  useEffect(() => {
+    const wasLoading = wasLoadingRef.current;
+    wasLoadingRef.current = stream.isLoading;
+    if (!wasLoading || stream.isLoading) return;
+    debugMessageLog("stream-loading-finished", {
+      threadId,
+      stream: {
+        count: stream.messages.length,
+        last: summarizeMessageForLog(stream.messages[stream.messages.length - 1]),
+      },
+      history: {
+        count: historyMessages.length,
+        last: summarizeMessageForLog(historyMessages[historyMessages.length - 1]),
+      },
+      displayed: {
+        count: displayedMessages.length,
+        last: summarizeMessageForLog(displayedMessages[displayedMessages.length - 1]),
+      },
+      error: stream.error instanceof Error ? stream.error.message : stream.error ? String(stream.error) : null,
+    });
+    if (threadId && !isUserCancelledError(stream.error)) {
+      loadHistoryMessages(threadId).catch((error) => {
+        debugMessageLog("history-load-after-finish-error", {
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    }
+  }, [stream.isLoading, stream.messages, historyMessages, displayedMessages, threadId, stream.error, loadHistoryMessages]);
 
   useEffect(() => {
     setOptimisticMessages((current) => {
@@ -352,6 +467,12 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
   const stableSubmit = useCallback((content: string) => {
     const s = submitStateRef.current;
     const optimisticMessage = createOptimisticHumanMessage(content);
+    debugMessageLog("submit", {
+      threadId: threadIdRef.current,
+      workspaceId: s.workspaceId,
+      contentLength: content.length,
+      optimisticId: optimisticMessage.id,
+    });
     setOptimisticMessages((current) => [...current, optimisticMessage]);
     try {
       streamRef.current.submit(
@@ -564,4 +685,44 @@ function mergeMessages(history: any[], live: any[]) {
     return 0;
   });
   return merged;
+}
+
+function debugMessageLog(label: string, payload: unknown | (() => unknown)) {
+  if (!isMessageDebugEnabled()) return;
+  const value = typeof payload === "function" ? (payload as () => unknown)() : payload;
+  console.debug(`[RumiMessages] ${label}`, value);
+}
+
+function debugMessageSnapshotLog(label: string, payload: () => any) {
+  if (!isMessageDebugEnabled()) return;
+  const value = payload();
+  if (label === "display-raf" && value?.anchor?.reason !== "missing-history-anchor") return;
+  console.debug(`[RumiMessages] ${label}`, value);
+}
+
+function isMessageDebugEnabled() {
+  if (typeof window === "undefined") return false;
+  try {
+    return window.localStorage.getItem("rumi-debug-messages") === "1";
+  } catch {
+    return false;
+  }
+}
+
+function summarizeMessageForLog(message: any) {
+  if (!message) return undefined;
+  const content = message?.content;
+  return {
+    type: message?._getType?.() || message?.type || message?.role || "message",
+    id: message?.id || message?.message_id,
+    rowId: message?._rowId,
+    contentLength: typeof content === "string" ? content.length : JSON.stringify(content ?? "").length,
+    toolCalls: Array.isArray(message?.tool_calls) ? message.tool_calls.length : 0,
+    name: message?.name,
+  };
+}
+
+function isUserCancelledError(error: unknown) {
+  const message = error instanceof Error ? error.message : error ? String(error) : "";
+  return message.includes("CancelledError");
 }

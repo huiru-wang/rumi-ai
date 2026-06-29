@@ -1,8 +1,8 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { type RefObject, useCallback, useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Pause, Play, Volume2, VolumeX } from "lucide-react";
+import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { fetchFileContent, getShareDetail, type ShareDetail, type ShareSlide } from "@/lib/api";
 
 const NAV_SCRIPT = `
@@ -85,14 +85,19 @@ export default function SharePage() {
 }
 
 function SharedPPTViewer({ detail }: { detail: ShareDetail }) {
+  const pageRef = useRef<HTMLElement>(null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen(pageRef);
+
   return (
-    <main className="flex h-screen flex-col bg-background">
-      <header className="flex items-center border-b border-border px-4 py-2.5">
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-medium text-foreground">{detail.ppt.title}</h1>
-          <p className="text-[10px] text-muted-foreground">只读分享</p>
-        </div>
-      </header>
+    <main ref={pageRef} className="flex h-screen flex-col bg-background">
+      {!isFullscreen && (
+        <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-medium text-foreground">{detail.ppt.title}</h1>
+          </div>
+          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} showLabel />
+        </header>
+      )}
       <div className="min-h-0 flex-1 bg-black">
         <iframe
           src={detail.ppt.html_url}
@@ -102,6 +107,57 @@ function SharedPPTViewer({ detail }: { detail: ShareDetail }) {
         />
       </div>
     </main>
+  );
+}
+
+function useFullscreen(targetRef: RefObject<HTMLElement | null>) {
+  const [isFullscreen, setIsFullscreen] = useState(false);
+
+  useEffect(() => {
+    const handleChange = () => {
+      setIsFullscreen(document.fullscreenElement === targetRef.current);
+    };
+
+    document.addEventListener("fullscreenchange", handleChange);
+    return () => document.removeEventListener("fullscreenchange", handleChange);
+  }, [targetRef]);
+
+  const toggleFullscreen = useCallback(() => {
+    const target = targetRef.current;
+    if (!target) return;
+
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void target.requestFullscreen();
+    }
+  }, [targetRef]);
+
+  return { isFullscreen, toggleFullscreen };
+}
+
+function FullscreenButton({
+  isFullscreen,
+  onToggle,
+  className = "",
+  showLabel = false,
+}: {
+  isFullscreen: boolean;
+  onToggle: () => void;
+  className?: string;
+  showLabel?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      className={`flex flex-shrink-0 items-center gap-1.5 rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground ${className}`}
+      title={isFullscreen ? "退出全屏" : "全屏"}
+      aria-label={isFullscreen ? "退出全屏" : "全屏"}
+    >
+      {isFullscreen ? <Minimize size={16} /> : <Maximize size={16} />}
+      {showLabel && !isFullscreen && <span className="text-xs font-medium">全屏</span>}
+    </button>
   );
 }
 
@@ -116,7 +172,10 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
   const [durations, setDurations] = useState<number[]>([]);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [isControlsRevealed, setIsControlsRevealed] = useState(false);
 
+  const pageRef = useRef<HTMLElement>(null);
+  const { isFullscreen, toggleFullscreen } = useFullscreen(pageRef);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
   const rafRef = useRef<number>(0);
@@ -183,6 +242,7 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
       .then(() => {
         isPlayingRef.current = true;
         setIsPlaying(true);
+        setIsControlsRevealed(false);
         startProgressLoop();
       })
       .catch(() => {
@@ -256,6 +316,8 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
 
   const totalDuration = durations.reduce((sum, item) => sum + item, 0);
   const isPlaybackReady = isFrameReady && !!pptHtml && slides.length > 0;
+  const shouldAutoHideControls = isFullscreen && isPlaying;
+  const isControlsVisible = !shouldAutoHideControls || isControlsRevealed;
 
   if (isLoading) {
     return (
@@ -280,15 +342,18 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
   }
 
   return (
-    <main className="flex h-screen flex-col bg-background">
-      <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
-        <div className="min-w-0">
-          <h1 className="truncate text-sm font-medium text-foreground">{detail.ppt.title}</h1>
-          <p className="text-[10px] text-muted-foreground">
-            第 {currentSlide + 1} / {slides.length} 页 · {detail.narration?.voice_name || "分享播放"}
-          </p>
-        </div>
-      </header>
+    <main ref={pageRef} className="relative flex h-screen flex-col overflow-hidden bg-background">
+      {!isFullscreen && (
+        <header className="flex items-center justify-between border-b border-border px-4 py-2.5">
+          <div className="min-w-0 flex-1">
+            <h1 className="truncate text-sm font-medium text-foreground">{detail.ppt.title}</h1>
+            <p className="text-[10px] text-muted-foreground">
+              第 {currentSlide + 1} / {slides.length} 页 · {detail.narration?.voice_name || "分享播放"}
+            </p>
+          </div>
+          <FullscreenButton isFullscreen={isFullscreen} onToggle={toggleFullscreen} className="ml-3" showLabel />
+        </header>
+      )}
 
       <div className="relative min-h-0 flex-1 bg-black">
         {pptHtml && (
@@ -314,7 +379,25 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
         )}
       </div>
 
-      <div className="border-t border-border bg-background px-4 py-3">
+      {shouldAutoHideControls && !isControlsVisible && (
+        <div
+          className="absolute inset-x-0 bottom-0 z-20 h-20"
+          onMouseEnter={() => setIsControlsRevealed(true)}
+        />
+      )}
+
+      <div
+        className={`border-t border-border bg-background px-4 py-3 transition-transform duration-300 ${isFullscreen
+            ? "absolute inset-x-0 bottom-0 z-30 bg-background/95 backdrop-blur-md"
+            : ""
+          } ${shouldAutoHideControls && !isControlsVisible ? "translate-y-full" : "translate-y-0"}`}
+        onMouseEnter={() => {
+          if (shouldAutoHideControls) setIsControlsRevealed(true);
+        }}
+        onMouseLeave={() => {
+          if (shouldAutoHideControls) setIsControlsRevealed(false);
+        }}
+      >
         <div className="flex items-center justify-between">
           <div className="min-w-[96px]" />
           <div className="flex items-center gap-3">
@@ -370,6 +453,12 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
               className="h-1 w-16 cursor-pointer accent-accent"
               title="音量"
             />
+            {isFullscreen && (
+              <FullscreenButton
+                isFullscreen={isFullscreen}
+                onToggle={toggleFullscreen}
+              />
+            )}
           </div>
         </div>
 
@@ -382,9 +471,8 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
               return (
                 <div
                   key={`${slide.number}-${index}`}
-                  className={`relative h-full transition-opacity ${
-                    isPlaybackReady ? "cursor-pointer hover:opacity-80" : "cursor-not-allowed opacity-60"
-                  }`}
+                  className={`relative h-full transition-opacity ${isPlaybackReady ? "cursor-pointer hover:opacity-80" : "cursor-not-allowed opacity-60"
+                    }`}
                   style={{ width: `${widthPct}%`, minWidth: "3px" }}
                   onClick={() => jumpToSlide(index)}
                   aria-label={`第 ${index + 1} 页进度`}

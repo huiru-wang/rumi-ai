@@ -53,8 +53,9 @@ interface PPTPlayerDialogProps {
   onClose: () => void;
 }
 
-export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }: PPTPlayerDialogProps) {
+export function PPTPlayerDialog({ narrationTask, pptTask, onClose }: PPTPlayerDialogProps) {
   const [isLoading, setIsLoading] = useState(true);
+  const [isFrameReady, setIsFrameReady] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pptHtml, setPptHtml] = useState("");
   const [slides, setSlides] = useState<SlideData[]>([]);
@@ -65,6 +66,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
   const [isFullscreen, setIsFullscreen] = useState(false);
   const [volume, setVolume] = useState(1);
   const [isMuted, setIsMuted] = useState(false);
+  const [isControlsRevealed, setIsControlsRevealed] = useState(false);
 
   const audioRefs = useRef<(HTMLAudioElement | null)[]>([]);
   const iframeRef = useRef<HTMLIFrameElement>(null);
@@ -89,6 +91,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
         const html = await fetchFileContent(pptFileUrl);
         if (cancelled) return;
 
+        setIsFrameReady(false);
         const injectedHtml = html.replace("</body>", `<script>${NAV_SCRIPT}</script></body>`);
         setPptHtml(injectedHtml);
 
@@ -112,23 +115,6 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
     init();
     return () => { cancelled = true; };
   }, [pptTask, narrationTask]);
-
-  // ESC: exit fullscreen first if active, otherwise close dialog; space: toggle play/pause
-  useEffect(() => {
-    const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        if (document.fullscreenElement) return; // browser exits fullscreen
-        onClose();
-      }
-      if (e.key === " ") {
-        e.preventDefault();
-        if (isPlayingRef.current) pause(); else play();
-      }
-    };
-    document.addEventListener("keydown", handleKey);
-    return () => document.removeEventListener("keydown", handleKey);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [onClose]);
 
   // Sync isFullscreen with browser fullscreen state
   useEffect(() => {
@@ -163,13 +149,15 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
   }, []);
 
   const play = useCallback(() => {
+    if (!isFrameReady) return;
     const audio = audioRefs.current[currentSlideRef.current];
     if (audio?.src) {
       audio.play().catch(() => { /* autoplay may be blocked */ });
     }
     setIsPlaying(true);
+    setIsControlsRevealed(false);
     startProgressLoop();
-  }, [startProgressLoop]);
+  }, [isFrameReady, startProgressLoop]);
 
   const pause = useCallback(() => {
     const audio = audioRefs.current[currentSlideRef.current];
@@ -177,6 +165,22 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
     setIsPlaying(false);
     stopProgressLoop();
   }, [stopProgressLoop]);
+
+  // ESC: exit fullscreen first if active, otherwise close dialog; space: toggle play/pause
+  useEffect(() => {
+    const handleKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        if (document.fullscreenElement) return; // browser exits fullscreen
+        onClose();
+      }
+      if (e.key === " ") {
+        e.preventDefault();
+        if (isPlayingRef.current) pause(); else play();
+      }
+    };
+    document.addEventListener("keydown", handleKey);
+    return () => document.removeEventListener("keydown", handleKey);
+  }, [onClose, pause, play]);
 
   const navigateToSlide = useCallback((index: number) => {
     const prevAudio = audioRefs.current[currentSlideRef.current];
@@ -270,6 +274,9 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
 
   const totalDuration = durations.reduce((a, b) => a + b, 0);
   const hasSlides = slides.length > 0;
+  const isPlaybackReady = isFrameReady && !!pptHtml && hasSlides;
+  const shouldAutoHideControls = isFullscreen && isPlaying;
+  const isControlsVisible = !shouldAutoHideControls || isControlsRevealed;
 
   // --- Render ---
 
@@ -319,7 +326,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
       onClick={isFullscreen ? undefined : onClose}
     >
       <div
-        className={`flex flex-col overflow-hidden ${
+        className={`relative flex flex-col overflow-hidden ${
           isFullscreen
             ? "h-full w-full"
             : "max-h-[90vh] w-full max-w-5xl rounded-2xl border border-border shadow-2xl"
@@ -327,23 +334,25 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/10 bg-black/40 px-4 py-2.5 backdrop-blur-md">
-          <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-medium text-foreground">
-              {pptTask.title || "PPT 播放"}
-            </p>
-            <p className="text-[10px] text-muted-foreground">
-              第 {currentSlide + 1} / {slides.length} 页
-            </p>
+        {!isFullscreen && (
+          <div className="flex items-center justify-between border-b border-white/10 bg-black/40 px-4 py-2.5 backdrop-blur-md">
+            <div className="min-w-0 flex-1">
+              <p className="truncate text-sm font-medium text-foreground">
+                {pptTask.title || "PPT 播放"}
+              </p>
+              <p className="text-[10px] text-muted-foreground">
+                第 {currentSlide + 1} / {slides.length} 页
+              </p>
+            </div>
+            <button
+              onClick={onClose}
+              className="ml-3 flex-shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
+              title="关闭 (ESC)"
+            >
+              <X size={16} />
+            </button>
           </div>
-          <button
-            onClick={onClose}
-            className="ml-3 flex-shrink-0 rounded-lg p-1.5 text-muted-foreground transition-colors hover:text-foreground"
-            title="关闭 (ESC)"
-          >
-            <X size={16} />
-          </button>
-        </div>
+        )}
 
         {/* PPT Area — 16:9 normally, flex-1 in fullscreen */}
         <div className={`relative w-full bg-black ${isFullscreen ? "min-h-0 flex-1" : "aspect-video"}`}>
@@ -354,12 +363,41 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
               className="absolute inset-0 h-full w-full border-0"
               title="PPT Presentation"
               sandbox="allow-scripts"
+              onLoad={() => {
+                setIsFrameReady(true);
+                iframeRef.current?.contentWindow?.postMessage({ type: "navigate-slide", index: currentSlideRef.current }, "*");
+              }}
             />
+          )}
+          {!isFrameReady && (
+            <div className="absolute inset-0 z-10 flex items-center justify-center bg-black/70 text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm">
+                <Loader2 size={18} className="animate-spin" />
+                加载播放画面...
+              </div>
+            </div>
           )}
         </div>
 
+        {shouldAutoHideControls && !isControlsVisible && (
+          <div
+            className="absolute inset-x-0 bottom-0 z-20 h-20"
+            onMouseEnter={() => setIsControlsRevealed(true)}
+          />
+        )}
+
         {/* Controls */}
-        <div className="border-t border-white/10 bg-black/40 px-4 py-2.5 backdrop-blur-md">
+        <div
+          className={`border-t border-white/10 bg-black/40 px-4 py-2.5 backdrop-blur-md transition-transform duration-300 ${
+            isFullscreen ? "absolute inset-x-0 bottom-0 z-30" : ""
+          } ${shouldAutoHideControls && !isControlsVisible ? "translate-y-full" : "translate-y-0"}`}
+          onMouseEnter={() => {
+            if (shouldAutoHideControls) setIsControlsRevealed(true);
+          }}
+          onMouseLeave={() => {
+            if (shouldAutoHideControls) setIsControlsRevealed(false);
+          }}
+        >
           {/* Playback buttons + volume + fullscreen */}
           <div className="flex items-center justify-between">
             {/* Left spacer (balances right side) */}
@@ -369,7 +407,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
             <div className="flex items-center gap-3">
               <button
                 onClick={goPrev}
-                disabled={currentSlide <= 0}
+                disabled={!isPlaybackReady || currentSlide <= 0}
                 className="rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 title="上一页"
               >
@@ -377,7 +415,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
               </button>
               <button
                 onClick={isPlaying ? pause : play}
-                disabled={!hasSlides}
+                disabled={!isPlaybackReady}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-accent/20 text-accent transition-colors hover:bg-accent/30 disabled:opacity-30"
                 title={isPlaying ? "暂停 (空格)" : "播放 (空格)"}
               >
@@ -385,7 +423,7 @@ export function PPTPlayerDialog({ workspaceId, narrationTask, pptTask, onClose }
               </button>
               <button
                 onClick={goNext}
-                disabled={currentSlide >= slides.length - 1}
+                disabled={!isPlaybackReady || currentSlide >= slides.length - 1}
                 className="rounded-lg p-2 text-muted-foreground transition-colors hover:text-foreground disabled:cursor-not-allowed disabled:opacity-30"
                 title="下一页"
               >

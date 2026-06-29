@@ -147,10 +147,10 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="mb-3 flex w-full items-center justify-center rounded-lg border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
+          className="mb-3 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
         >
-          {uploading ? "上传中..." : "+ 上传文档"}
-          <span className="ml-1.5 text-[10px] text-muted-foreground/60">
+          {uploading ? "上传中..." : "上传文档"}
+          <span className="text-[10px] text-muted-foreground/60">
             PDF / Word / Markdown / TXT
           </span>
         </button>

@@ -106,10 +106,18 @@ All form `label` and `options` **must match the user's language**. When the user
 - If the user did not provide a topic, set `recommended` to the most relevant topic from the document options.
 
 **Question 2 — Purpose（用途）** (header: "Purpose")
-- Type: `select`
-- Options: `产品路演` / `教学培训` / `会议演讲` / `内部汇报`
-- If the user's message clearly states a purpose, set `recommended: ["<matched option>"]`.
-- Otherwise, recommend based on Topic context (e.g., product-related topic → "产品路演", teaching-related topic → "教学培训").
+- Type: `select`, `allow_custom: true`
+- Options: Dynamically generate 4–6 purpose options from the user's message, selected topic, and knowledge-base document summaries. Options should be concrete presentation scenarios, not generic labels.
+- If the user's message clearly states a purpose, include that purpose as an option and set `recommended: ["<user's purpose>"]`.
+- If the user did not provide a purpose, infer the most likely purpose from the topic and document content, then set it as the single recommended option.
+- Prefer domain-specific options over the old generic defaults. Examples:
+  - Product/business content → `客户提案`, `产品介绍`, `售前演示`, `市场宣讲`, `投资人路演`
+  - Technical/API/architecture/spec content → `技术培训`, `方案评审`, `团队内部宣贯`, `实施落地说明`, `技术分享`
+  - Project/progress/metrics content → `项目汇报`, `管理层汇报`, `阶段复盘`, `计划评审`
+  - Process/SOP/manual content → `操作培训`, `流程宣贯`, `制度解读`, `新员工培训`
+  - Research/analysis/report content → `研究汇报`, `洞察分享`, `决策建议`, `专题研讨`
+- Only use generic fallbacks such as `产品路演`, `教学培训`, `会议演讲`, `内部汇报` when the available context is too thin to infer a more specific scenario.
+- **Never add placeholder options like "其他" or "自定义用途" to the `options` array** — the custom input field (rendered automatically when `allow_custom=true`) already handles free-text input.
 
 **Question 3 — Length（页数）** (header: "Length")
 - Type: `select`

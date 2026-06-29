@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Save, Check, Loader2, AlertCircle, Pencil } from "lucide-react";
+import { X, Save, Check, Loader2, AlertCircle, Pencil, Maximize } from "lucide-react";
 import { fetchFileContent, getTaskPreviewUrl, saveTaskFile, type Task, type PptStyleInfo } from "@/lib/api";
 
 // Script injected into iframe: handles edit mode sync + HTML export for save
@@ -71,7 +71,9 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
   const [saveState, setSaveState] = useState<SaveState>("idle");
   const [saveError, setSaveError] = useState("");
   const [isEditMode, setIsEditMode] = useState(false);
+  const [isFullscreen, setIsFullscreen] = useState(false);
 
+  const dialogRef = useRef<HTMLDivElement>(null);
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const saveTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const htmlResponseResolver = useRef<((html: string) => void) | null>(null);
@@ -121,6 +123,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
       if (e.key === "Escape") {
+        if (document.fullscreenElement) return;
         onClose();
       }
     };
@@ -141,6 +144,12 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
     };
     window.addEventListener("message", handleMessage);
     return () => window.removeEventListener("message", handleMessage);
+  }, []);
+
+  useEffect(() => {
+    const handleChange = () => setIsFullscreen(document.fullscreenElement === dialogRef.current);
+    document.addEventListener("fullscreenchange", handleChange);
+    return () => document.removeEventListener("fullscreenchange", handleChange);
   }, []);
 
   // Toggle edit mode: send command to iframe and update local state
@@ -197,6 +206,15 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
     }
   }, [workspaceId, pptTask.id]);
 
+  const toggleFullscreen = useCallback(() => {
+    if (!dialogRef.current) return;
+    if (document.fullscreenElement) {
+      void document.exitFullscreen();
+    } else {
+      void dialogRef.current.requestFullscreen();
+    }
+  }, []);
+
   // Error state
   if (error) {
     return (
@@ -235,7 +253,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
   }
 
   // Save button content
-  const SaveButtonContent = () => {
+  const renderSaveButtonContent = () => {
     switch (saveState) {
       case "saving":
         return (
@@ -270,20 +288,22 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
 
   return (
     <div
+      ref={dialogRef}
       className="fixed inset-0 z-50 flex flex-col bg-background"
       onClick={(e) => {
         // Only close if clicking the backdrop (outside the main content area)
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Close button - floating top right */}
-      <button
-        onClick={onClose}
-        className="absolute right-4 top-4 z-10 rounded-lg bg-background/80 p-2 text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground"
-        title="关闭 (ESC)"
-      >
-        <X size={18} />
-      </button>
+      {!isFullscreen && (
+        <button
+          onClick={onClose}
+          className="absolute right-4 top-4 z-10 rounded-lg bg-background/80 p-2 text-muted-foreground backdrop-blur-sm transition-colors hover:text-foreground"
+          title="关闭 (ESC)"
+        >
+          <X size={18} />
+        </button>
+      )}
 
       {/* PPT iframe area - fills all space except bottom bar */}
       <div className="min-h-0 flex-1">
@@ -298,57 +318,67 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
         )}
       </div>
 
-      {/* Bottom bar */}
-      <div className="flex shrink-0 items-center justify-between border-t border-border bg-background px-5 py-3">
-        {/* Left: hints */}
-        <div className="flex items-center gap-4 text-xs text-muted-foreground">
-          <span className="flex items-center gap-1.5">
-            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">←</kbd>
-            <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">→</kbd>
-            翻页
-          </span>
-        </div>
+      {!isFullscreen && (
+        <div className="flex shrink-0 items-center justify-between border-t border-border bg-background px-5 py-3">
+          {/* Left: hints */}
+          <div className="flex items-center gap-4 text-xs text-muted-foreground">
+            <span className="flex items-center gap-1.5">
+              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">←</kbd>
+              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">→</kbd>
+              翻页
+            </span>
+          </div>
 
-        {/* Center: title + style name */}
-        <div className="flex items-center gap-2 text-sm text-foreground">
-          <span className="font-medium">{pptTitle}</span>
-          {styleName && (
-            <span className="text-xs text-muted-foreground">（{styleName}）</span>
-          )}
-        </div>
+          {/* Center: title + style name */}
+          <div className="flex items-center gap-2 text-sm text-foreground">
+            <span className="font-medium">{pptTitle}</span>
+            {styleName && (
+              <span className="text-xs text-muted-foreground">（{styleName}）</span>
+            )}
+          </div>
 
-        {/* Right: edit/save button + error message */}
-        <div className="flex items-center gap-2">
-          {saveState === "error" && saveError && (
-            <span className="text-xs text-red-400">{saveError}</span>
-          )}
-          {/* Combined edit/save button */}
-          {!isEditMode ? (
+          {/* Right: edit/save button + error message */}
+          <div className="flex items-center gap-2">
+            {saveState === "error" && saveError && (
+              <span className="text-xs text-red-400">{saveError}</span>
+            )}
+            {/* Combined edit/save button */}
+            {!isEditMode ? (
+              <button
+                onClick={handleToggleEdit}
+                className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
+                title="开启编辑模式"
+              >
+                <Pencil size={13} />
+                开启编辑模式
+              </button>
+            ) : (
+              <button
+                onClick={handleSave}
+                disabled={saveState === "saving"}
+                className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
+                  saveState === "saved"
+                    ? "bg-green-500/20 text-green-400"
+                    : saveState === "error"
+                      ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
+                      : "bg-accent/20 text-accent hover:bg-accent/30"
+                } disabled:opacity-50`}
+              >
+                {renderSaveButtonContent()}
+              </button>
+            )}
             <button
-              onClick={handleToggleEdit}
+              onClick={toggleFullscreen}
               className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-              title="开启编辑模式"
+              title="全屏"
+              aria-label="全屏"
             >
-              <Pencil size={13} />
-              开启编辑模式
+              <Maximize size={13} />
+              全屏
             </button>
-          ) : (
-            <button
-              onClick={handleSave}
-              disabled={saveState === "saving"}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
-                saveState === "saved"
-                  ? "bg-green-500/20 text-green-400"
-                  : saveState === "error"
-                    ? "bg-red-500/20 text-red-400 hover:bg-red-500/30"
-                    : "bg-accent/20 text-accent hover:bg-accent/30"
-              } disabled:opacity-50`}
-            >
-              <SaveButtonContent />
-            </button>
-          )}
+          </div>
         </div>
-      </div>
+      )}
     </div>
   );
 }
