@@ -62,6 +62,38 @@ CSS does not allow a leading `-` before function names. The browser silently dis
 
 ---
 
+### Grid Column Count Must Match All Direct Children
+
+**WRONG — decorative elements (dividers, arrows) are also grid children:**
+```css
+/* Intent: 2 content panels with a divider between them */
+.split-layout {
+  grid-template-columns: 1fr 1fr; /* BUG: 3 children, only 2 columns */
+}
+
+/* Intent: 3 layers with arrows between them */
+.arch-grid {
+  grid-template-columns: repeat(3, 1fr); /* BUG: 5 children, only 3 columns */
+}
+```
+
+**CORRECT — account for every direct child element:**
+```css
+/* 3 children: panel + divider + panel */
+.split-layout {
+  grid-template-columns: 1fr auto 1fr;
+}
+
+/* 5 children: layer + arrow + layer + arrow + layer */
+.arch-grid {
+  grid-template-columns: 1fr auto 1fr auto 1fr;
+}
+```
+
+CSS Grid places ALL direct children into the column template sequentially. When `grid-template-columns` has fewer slots than children, extra items wrap to implicit rows — causing broken layouts with no console error. **Always count every direct child (including decorative separators, arrows, dividers) and set columns accordingly.** Use `auto` for decorative elements so they only take their intrinsic width.
+
+---
+
 ## DO NOT USE (Generic AI Patterns)
 
 **Fonts:** Inter, Roboto, Arial, system fonts as display

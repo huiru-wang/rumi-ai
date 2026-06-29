@@ -147,7 +147,7 @@ class ContextInjectMiddleware(AgentMiddleware):
                 s_desc = style_record.get("description", "")
                 s_id = style_record.get("id", ppt_style)
                 pref_lines.append(
-                    f"- PPT视觉风格：{s_name}（{s_name_en}），ID: {s_id}"
+                    f"- PPT视觉风格：{s_name}，ID: {s_id}"
                     + (f"，{s_desc}" if s_desc else "")
                     + "（用户已预选，生成PPT时必须调用 get_style_template 工具获取完整风格规范）"
                 )
