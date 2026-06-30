@@ -6,7 +6,7 @@ import {
   getLiveMessagesAfterHistory,
   shouldPreserveDisplayedMessages,
   shouldUseLiveMessages,
-} from "./message-display.js";
+} from "./message-display.ts";
 
 test("does not use live stream messages while persisted history is loading", () => {
   assert.equal(

@@ -54,6 +54,7 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
   const [documents, setDocuments] = useState<Document[]>([]);
   const [uploading, setUploading] = useState(false);
   const [uploadError, setUploadError] = useState("");
+  const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const fetchDocuments = useCallback(async () => {
@@ -75,16 +76,16 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
     return () => window.clearInterval(interval);
   }, [documents, fetchDocuments]);
 
-  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
-    const files = event.target.files;
-    if (!files || files.length === 0) return;
+  const processFiles = useCallback(async (files: FileList | File[]) => {
+    const fileArray = Array.from(files);
+    if (fileArray.length === 0) return;
 
-    console.log(`[DocPanel] uploading ${files.length} file(s)`);
+    console.log(`[DocPanel] uploading ${fileArray.length} file(s)`);
     setUploading(true);
     setUploadError("");
     const errors: string[] = [];
     try {
-      for (const file of Array.from(files)) {
+      for (const file of fileArray) {
         console.log(`[DocPanel] uploading: ${file.name} (${file.size} bytes)`);
         try {
           const result = await uploadDocument(workspaceId, file);
@@ -109,7 +110,31 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
         fileInputRef.current.value = "";
       }
     }
+  }, [workspaceId, fetchDocuments]);
+
+  const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const files = event.target.files;
+    if (!files || files.length === 0) return;
+    processFiles(files);
   };
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+    if (uploading) return;
+    const files = e.dataTransfer.files;
+    if (files.length > 0) processFiles(files);
+  }, [uploading, processFiles]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(true);
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    setDragOver(false);
+  }, []);
 
   const handleDelete = async (docId: string) => {
     try {
@@ -142,16 +167,25 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
       )}
 
       {/* Document List */}
-      <div className="flex-1 overflow-y-auto p-3">
+      <div
+        className={`flex-1 overflow-y-auto p-3 transition-colors ${dragOver ? "bg-accent/5" : ""}`}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
         {/* Upload Card */}
         <button
           onClick={() => fileInputRef.current?.click()}
           disabled={uploading}
-          className="mb-3 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed border-border py-2.5 text-xs text-muted-foreground transition-colors hover:border-accent/50 hover:text-accent disabled:opacity-50"
+          className={`mb-3 flex w-full flex-col items-center justify-center gap-1 rounded-lg border border-dashed py-2.5 text-xs text-muted-foreground transition-colors disabled:opacity-50 ${
+            dragOver
+              ? "border-accent bg-accent/10 text-accent"
+              : "border-border hover:border-accent/50 hover:text-accent"
+          }`}
         >
-          {uploading ? "上传中..." : "上传文档"}
+          {uploading ? "上传中..." : dragOver ? "松开上传文件" : "上传文档"}
           <span className="text-[10px] text-muted-foreground/60">
-            PDF / Word / Markdown / TXT
+            支持拖拽 · PDF / Word / Markdown / TXT
           </span>
         </button>
         <input

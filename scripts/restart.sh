@@ -6,5 +6,5 @@ SCRIPTS="$(cd "$(dirname "$0")" && pwd)"
 ENV_NAME="${1:-dev}"
 
 "$SCRIPTS/stop.sh" "$ENV_NAME"
-sleep 1
+sleep 5
 "$SCRIPTS/start.sh" "$ENV_NAME"

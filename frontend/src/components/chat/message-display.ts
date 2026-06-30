@@ -1,20 +1,22 @@
-/**
- * @param {{ threadId: string | null; isInitialHistoryLoading: boolean }} state
- */
-export function shouldUseLiveMessages(state) {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type Message = any;
+
+interface UseLiveMessagesState {
+  threadId: string | null;
+  isInitialHistoryLoading: boolean;
+}
+
+export function shouldUseLiveMessages(state: UseLiveMessagesState): boolean {
   return !state.threadId || !state.isInitialHistoryLoading;
 }
 
-/**
- * @template T
- * @param {{
- *   historyMessages: T[];
- *   streamMessages: T[];
- *   getMessageKey: (message: T) => string;
- * }} input
- * @returns {T[]}
- */
-export function getLiveMessagesAfterHistory(input) {
+interface GetLiveMessagesInput<T> {
+  historyMessages: T[];
+  streamMessages: T[];
+  getMessageKey: (message: T) => string;
+}
+
+export function getLiveMessagesAfterHistory<T>(input: GetLiveMessagesInput<T>): T[] {
   const { historyMessages, streamMessages, getMessageKey } = input;
   if (historyMessages.length === 0) return streamMessages;
 
@@ -27,19 +29,17 @@ export function getLiveMessagesAfterHistory(input) {
   return streamMessages.slice(lastHistoryIndex + 1);
 }
 
-/**
- * @template T
- * @param {{
- *   isLoading: boolean;
- *   historyMessages: T[];
- *   streamMessages: T[];
- *   liveMessages: T[];
- *   nextDisplayedMessages: T[];
- *   previousDisplayedMessages: T[];
- *   getMessageKey: (message: T) => string;
- * }} input
- */
-export function shouldPreserveDisplayedMessages(input) {
+interface PreserveDisplayedInput<T> {
+  isLoading: boolean;
+  historyMessages: T[];
+  streamMessages: T[];
+  liveMessages: T[];
+  nextDisplayedMessages: T[];
+  previousDisplayedMessages: T[];
+  getMessageKey: (message: T) => string;
+}
+
+export function shouldPreserveDisplayedMessages<T>(input: PreserveDisplayedInput<T>): boolean {
   if (input.isLoading) return false;
   if (input.historyMessages.length === 0) return false;
   if (input.streamMessages.length === 0) return false;
@@ -53,21 +53,19 @@ export function shouldPreserveDisplayedMessages(input) {
   return !hasHistoryAnchor;
 }
 
-/**
- * @template T
- * @param {{
- *   phase: string;
- *   threadId: string | null;
- *   isLoading: boolean;
- *   historyMessages: T[];
- *   streamMessages: T[];
- *   liveMessages: T[];
- *   displayedMessages: T[];
- *   optimisticMessages: T[];
- *   getMessageKey: (message: T) => string;
- * }} input
- */
-export function createMessageDebugSnapshot(input) {
+interface DebugSnapshotInput<T> {
+  phase: string;
+  threadId: string | null;
+  isLoading: boolean;
+  historyMessages: T[];
+  streamMessages: T[];
+  liveMessages: T[];
+  displayedMessages: T[];
+  optimisticMessages: T[];
+  getMessageKey: (message: T) => string;
+}
+
+export function createMessageDebugSnapshot<T>(input: DebugSnapshotInput<T>) {
   const lastHistoryMessage = input.historyMessages[input.historyMessages.length - 1];
   const lastHistoryKey = lastHistoryMessage ? input.getMessageKey(lastHistoryMessage) : undefined;
   const indexInStream = lastHistoryKey
@@ -91,21 +89,25 @@ export function createMessageDebugSnapshot(input) {
   };
 }
 
-function getAnchorReason(historyMessages, streamMessages, indexInStream) {
+function getAnchorReason<T>(
+  historyMessages: T[],
+  streamMessages: T[],
+  indexInStream: number | undefined,
+): string {
   if (historyMessages.length === 0) return "no-history";
   if (streamMessages.length === 0) return "no-stream";
   if (indexInStream === -1) return "missing-history-anchor";
   return "ok";
 }
 
-function summarizeMessageList(messages) {
+function summarizeMessageList(messages: Message[]) {
   return {
     count: messages.length,
     last: summarizeMessageForDebug(messages[messages.length - 1]),
   };
 }
 
-function summarizeMessageForDebug(message) {
+function summarizeMessageForDebug(message: Message) {
   if (!message) return undefined;
   return {
     type: message?._getType?.() || message?.type || message?.role || "message",
@@ -117,7 +119,7 @@ function summarizeMessageForDebug(message) {
   };
 }
 
-function getContentLength(content) {
+function getContentLength(content: unknown): number {
   if (typeof content === "string") return content.length;
   return JSON.stringify(content ?? "").length;
 }

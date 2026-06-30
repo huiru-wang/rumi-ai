@@ -227,6 +227,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
     threadId,
     onThreadId: handleThreadId,
     onUpdateEvent: handleUpdateEvent,
+    reconnectOnMount: true,
   });
 
   // Keep snapshot ref in sync (used by handleUpdateEvent callback)
