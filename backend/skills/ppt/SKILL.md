@@ -296,6 +296,7 @@ The final presentation must follow the confirmed outline. You may split an overl
 - Use fonts from fonts.loli.net (China-accessible Google Fonts mirror) — never system fonts, never api.fontshare.com
 - Add detailed comments explaining each section
 - Every section needs a clear `/* === SECTION NAME === */` comment block
+- **Image containers MUST use the standard Image Slot System**: use `.img-slot` class + `data-img-slot` attribute + `data-ratio` attribute for all image placeholder areas. Never invent custom class names (e.g. `.visual-placeholder`, `.img-grid-figure`). For image grids, wrap items in `.img-slot-grid[data-columns="N"]`. Include the Image Upload Module JS and CSS from `html-template.md` when inline editing is enabled. Add `<input type="file" id="imgUploader" accept="image/*" style="display:none" />` at the start of `<body>`.
 - **严禁在幻灯片内容中出现任何来源引用标记**：包括 `{{ref:...}}`、`ref:文档名|章节`、`📄 文件名 | 位置`、`[片段N]` 等一切形式。RAG 检索返回的来源标注仅供你理解内容出处，绝不能写入最终 HTML。
 
 ---

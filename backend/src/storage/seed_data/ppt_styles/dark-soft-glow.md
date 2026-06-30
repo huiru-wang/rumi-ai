@@ -183,6 +183,14 @@ CTA 使用 `--accent-main` 填充的圆角胶囊按钮，文字为深色 `#0f0f0
 
 本风格不依赖外部图片资源，所有视觉效果由 CSS 生成。若需使用图标，建议使用极简符号、emoji 或几何抽象图形，并保持低饱和度或单色调处理，避免破坏暗色柔光的整体氛围。
 
+**Image Slot 变量覆盖**（写入 `:root`）：
+
+```css
+--img-slot-radius: 8px;
+--img-slot-border: 1px solid rgba(255,255,255,0.1);
+--img-slot-bg: rgba(255,255,255,0.03);
+```
+
 ## 7. Usage Guidelines — 生成新 PPT 时的使用说明
 
 1. **页面类型选择**：优先用于 Cover、Statement、三列卡片、数据卡片、流程步骤、Closing 六种页面；避免信息密度过高的复杂表格页。

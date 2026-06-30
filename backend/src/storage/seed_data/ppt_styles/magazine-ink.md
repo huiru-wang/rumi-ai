@@ -241,6 +241,14 @@ https://fonts.loli.net/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;
 
 所有图片必须包在图片框中，使用标准比例（16:10 / 4:3 / 3:4 / 1:1）。网格中的图片必须统一固定高度，避免使用原图奇葩比例。信息图/截图应使用 contain 填充以避免文字被裁切。
 
+**Image Slot 变量覆盖**（写入 `:root`）：
+
+```css
+--img-slot-radius: 0;
+--img-slot-border: 1px solid var(--accent-muted, rgba(128,128,128,0.15));
+--img-slot-bg: var(--bg-secondary, rgba(128,128,128,0.05));
+```
+
 ### 巨型背景字
 
 可选装饰：极低的透明度文字，用于 hero 页或金句页。内容多为英文关键词、章节序号或「BUT/NOW/HERE」。使用时其他内容需浮于其上层。

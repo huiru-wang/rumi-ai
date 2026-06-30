@@ -153,6 +153,14 @@ https://fonts.loli.net/css2?family=Outfit:wght@400;500;700;800&family=Noto+Sans+
 - 图片色调建议偏暖 pastel，与整体配色协调；
 - 图片区域需避开左侧主标题与右侧卡片文字的安全区。
 
+**Image Slot 变量覆盖**（写入 `:root`）：
+
+```css
+--img-slot-radius: 12px;
+--img-slot-border: none;
+--img-slot-bg: rgba(255,255,255,0.6);
+```
+
 ## 7. Usage Guidelines — 生成新 PPT 时的使用说明
 
 1. **页面类型选择**：新 PPT 必须包含封面页、若干内容页（卡片型或列表型择一或混用）、结尾页。

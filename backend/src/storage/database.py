@@ -159,14 +159,7 @@ class Database:
             if "voice_id" in ext:
                 del ext["voice_id"]
                 changed = True
-            # Migrate: old ppt_style name_en → style ID
-            ppt_val = ext.get("ppt_style", "")
-            if ppt_val and not ppt_val.startswith("sys-"):
-                ext["ppt_style"] = f"sys-{ppt_val}"
-                changed = True
-            if ext.get("ppt_style") == "sys-cream-brutalism":
-                ext["ppt_style"] = "sys-cream-pastel-infographic"
-                changed = True
+
             if changed:
                 await self.connection.execute(
                     "UPDATE workspace SET ext_data = ? WHERE id = ?",

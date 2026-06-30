@@ -17,6 +17,64 @@ For mandatory base styles, see [viewport-base.css](../assets/viewport-base.css).
 
 ---
 
+## Image Container Convention (Mandatory)
+
+All image placeholder areas in generated HTML presentations **must** follow this standard structure. This ensures the editing system can reliably detect and enable image upload on any image slot, regardless of the visual style.
+
+### Required Class & Attributes
+
+| Element | Class | Required Attribute | Purpose |
+|---------|-------|-------------------|---------|
+| Single image slot | `.img-slot` | `data-img-slot`, `data-ratio` | Editable image placeholder |
+| Grid container | `.img-slot-grid` | `data-columns` | Multi-image grid wrapper |
+| Grid item caption | `.img-slot-caption` | — | Caption below image |
+| Full-bleed background | `.bg-image` | — | CSS background-image |
+
+### Supported Ratios
+
+`data-ratio` accepts: `16:10`, `4:3`, `3:4`, `1:1`, `auto`
+
+### Standard HTML Structures
+
+**Type A — Single image in a split/mixed layout:**
+
+```html
+<div class="img-slot" data-img-slot data-ratio="16:10">[描述文字]</div>
+```
+
+**Type B — Image grid (3 columns):**
+
+```html
+<div class="img-slot-grid" data-columns="3">
+  <figure>
+    <div class="img-slot" data-img-slot data-ratio="4:3">[图片描述]</div>
+    <figcaption class="img-slot-caption">说明文字</figcaption>
+  </figure>
+  <!-- more figures... -->
+</div>
+```
+
+### Style Customization via CSS Variables
+
+Styles **must not** override `.img-slot` structural properties directly. Instead, override these variables in `:root`:
+
+| Variable | Default | What it controls |
+|----------|---------|------------------|
+| `--img-slot-radius` | `0` | Border radius |
+| `--img-slot-border` | `1px solid rgba(128,128,128,0.2)` | Border |
+| `--img-slot-bg` | `rgba(128,128,128,0.05)` | Empty-state background |
+| `--img-slot-caption-font` | `var(--font-mono)` | Caption font |
+| `--img-slot-caption-size` | `var(--small-size)` | Caption size |
+
+### Prohibited
+
+- ❌ Custom class names for image placeholders (e.g. `.visual-placeholder`, `.img-grid-figure`)
+- ❌ Defining image containers without `data-img-slot` attribute
+- ❌ Using `<img>` tags for empty placeholders (only use when actual image data is loaded)
+- ❌ Overriding `.img-slot` structural CSS (aspect-ratio, max-height, display) in style-specific rules
+
+---
+
 ## Image Implementation Rules
 
 - **Content images** (screenshots, logos, inline visuals) must use the `.slide-image` class. They are constrained by `max-height: min(50vh, 400px)` from `viewport-base.css`.

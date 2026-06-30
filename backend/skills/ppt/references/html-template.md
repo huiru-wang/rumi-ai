@@ -458,6 +458,221 @@ setupAutoSave() {
 ```
 
 
+## Image Slot System
+
+Every presentation that contains image placeholder areas must use the standardized Image Slot structure. This enables the built-in image upload functionality in edit mode.
+
+### Required HTML Element
+
+Add this hidden file input at the beginning of `<body>`:
+
+```html
+<input type="file" id="imgUploader" accept="image/*" style="display:none" />
+```
+
+### Image Slot HTML Examples
+
+**Single image in split layout (right column):**
+
+```html
+<div class="split-right">
+  <div class="img-slot reveal" data-img-slot data-ratio="16:10">
+    [缺陷形态示意图]
+  </div>
+</div>
+```
+
+**Image grid (3 columns with captions):**
+
+```html
+<div class="img-slot-grid" data-columns="3">
+  <figure class="reveal">
+    <div class="img-slot" data-img-slot data-ratio="4:3">[假缺陷]</div>
+    <figcaption class="img-slot-caption">假缺陷 — 检测程式设置不当引起</figcaption>
+  </figure>
+  <figure class="reveal">
+    <div class="img-slot" data-img-slot data-ratio="4:3">[颜粒]</div>
+    <figcaption class="img-slot-caption">颜粒 — 可追溯至具体机台</figcaption>
+  </figure>
+  <figure class="reveal">
+    <div class="img-slot" data-img-slot data-ratio="4:3">[刮伤]</div>
+    <figcaption class="img-slot-caption">刮伤 — 人为不规则 vs 机台规则</figcaption>
+  </figure>
+</div>
+```
+
+### Image Upload Module (Edit Mode)
+
+Include this JS module **after** the editor's `setupAutoSave()` call. It enables clicking on any `[data-img-slot]` element in edit mode to upload an image (stored as Data URL).
+
+```javascript
+/* ===========================================
+   IMAGE UPLOAD MODULE
+   Enables image upload on [data-img-slot] elements in edit mode.
+   Images stored as Data URL for self-contained HTML.
+   =========================================== */
+const imgUpload = {
+    fileInput: document.getElementById('imgUploader'),
+    currentTarget: null,
+    maxSize: 4 * 1024 * 1024, // 4MB limit
+
+    init() {
+        if (!this.fileInput) return;
+        this.fileInput.addEventListener('change', (e) => this.handleFileSelect(e));
+        document.addEventListener('click', (e) => this.handleSlotClick(e));
+    },
+
+    handleSlotClick(e) {
+        if (!editor.isActive) return;
+        const slot = e.target.closest('[data-img-slot]');
+        if (!slot) return;
+
+        // If slot already has an image, only trigger on the replace button
+        if (slot.classList.contains('has-image')) {
+            if (e.target.closest('.img-replace-btn')) {
+                this.currentTarget = slot;
+                this.fileInput.click();
+            }
+            return;
+        }
+
+        this.currentTarget = slot;
+        this.fileInput.click();
+    },
+
+    handleFileSelect(e) {
+        const file = e.target.files[0];
+        if (!file || !this.currentTarget) return;
+
+        if (file.size > this.maxSize) {
+            alert('\u56FE\u7247\u6587\u4EF6\u4E0D\u80FD\u8D85\u8FC7 4MB');
+            this.fileInput.value = '';
+            return;
+        }
+
+        const reader = new FileReader();
+        reader.onload = (evt) => {
+            this.insertImage(this.currentTarget, evt.target.result);
+            this.fileInput.value = '';
+            this.currentTarget = null;
+        };
+        reader.readAsDataURL(file);
+    },
+
+    insertImage(slot, dataUrl) {
+        const altText = slot.textContent.trim().replace(/[\[\]]/g, '');
+        slot.innerHTML =
+            '<img src="' + dataUrl + '" alt="' + altText + '" draggable="false" />' +
+            '<div class="img-controls">' +
+                '<button class="img-fit-btn" title="\u5207\u6362\u586B\u5145">\u26F6</button>' +
+                '<button class="img-replace-btn" title="\u66FF\u6362">\u21BB</button>' +
+                '<button class="img-remove-btn" title="\u79FB\u9664">\u2715</button>' +
+            '</div>';
+        slot.classList.add('has-image');
+
+        const img = slot.querySelector('img');
+        const fitBtn = slot.querySelector('.img-fit-btn');
+        const removeBtn = slot.querySelector('.img-remove-btn');
+
+        fitBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            const isCover = img.style.objectFit === 'cover';
+            img.style.objectFit = isCover ? 'contain' : 'cover';
+            img.style.width = '100%';
+            img.style.height = '100%';
+        });
+
+        removeBtn.addEventListener('click', (ev) => {
+            ev.stopPropagation();
+            slot.innerHTML = '[' + (altText || '\u56FE\u7247') + ']';
+            slot.classList.remove('has-image');
+        });
+    }
+};
+
+imgUpload.init();
+```
+
+### Image Upload CSS (Edit Mode)
+
+Include these styles alongside the edit mode CSS:
+
+```css
+/* Image slot edit mode interactions */
+body.edit-active [data-img-slot] {
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s;
+}
+body.edit-active [data-img-slot]:not(.has-image) {
+    border-style: dashed;
+    border-color: rgba(128,128,128,0.5);
+}
+body.edit-active [data-img-slot]:not(.has-image):hover {
+    border-color: var(--accent, #333);
+    background: rgba(128,128,128,0.06);
+}
+body.edit-active [data-img-slot]:not(.has-image)::before {
+    content: '\1F4F7';
+    font-size: clamp(1.2rem, 2.5vw, 2rem);
+    display: block;
+    margin-bottom: 0.3rem;
+    opacity: 0.7;
+    pointer-events: none;
+}
+body.edit-active [data-img-slot]:not(.has-image)::after {
+    content: '\70B9\51FB\4E0A\4F20\56FE\7247';
+    position: absolute;
+    bottom: clamp(4px, 1vw, 10px);
+    left: 50%;
+    transform: translateX(-50%);
+    font-size: var(--small-size, 0.75rem);
+    opacity: 0.7;
+    pointer-events: none;
+    white-space: nowrap;
+}
+body.edit-active [data-img-slot].has-image {
+    border: none;
+    background: none;
+}
+body.edit-active [data-img-slot].has-image:hover {
+    outline: 2px dashed var(--accent, #333);
+    outline-offset: 2px;
+}
+
+/* Image controls overlay */
+.img-controls {
+    position: absolute;
+    top: 6px;
+    right: 6px;
+    display: none;
+    gap: 4px;
+}
+body.edit-active [data-img-slot]:hover .img-controls {
+    display: flex;
+}
+body:not(.edit-active) .img-controls {
+    display: none;
+}
+.img-controls button {
+    width: 26px;
+    height: 26px;
+    border-radius: 4px;
+    border: 1px solid rgba(128,128,128,0.3);
+    background: var(--bg-primary, #fff);
+    color: var(--text-primary, #000);
+    font-size: 13px;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.1);
+}
+.img-controls button:hover {
+    background: var(--bg-secondary, #eee);
+}
+```
+
+
 ## Chart Slide Example
 
 A chart slide combines an SVG visualization with a title and one or two insights. Keep the chart height under 60% of the slide.

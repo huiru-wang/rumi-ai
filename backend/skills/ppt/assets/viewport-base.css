@@ -86,6 +86,84 @@ img, .image-container {
 }
 
 /* ===========================================
+   9. IMAGE SLOT SYSTEM (Mandatory)
+   Standard image containers for all styles.
+   Styles customize via --img-slot-* variables.
+   =========================================== */
+:root {
+    --img-slot-radius: 0;
+    --img-slot-border: 1px solid rgba(128,128,128,0.2);
+    --img-slot-bg: rgba(128,128,128,0.05);
+    --img-slot-caption-font: var(--font-mono, monospace);
+    --img-slot-caption-size: var(--small-size, 0.75rem);
+}
+
+/* Single image slot */
+.img-slot {
+    width: 100%;
+    max-height: min(50vh, 400px);
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: var(--img-slot-radius);
+    border: var(--img-slot-border);
+    background: var(--img-slot-bg);
+    position: relative;
+}
+
+/* Aspect ratio driven by data-ratio attribute */
+.img-slot[data-ratio="16:10"] { aspect-ratio: 16/10; }
+.img-slot[data-ratio="4:3"]   { aspect-ratio: 4/3; }
+.img-slot[data-ratio="3:4"]   { aspect-ratio: 3/4; }
+.img-slot[data-ratio="1:1"]   { aspect-ratio: 1/1; }
+.img-slot[data-ratio="auto"]  { aspect-ratio: auto; min-height: 120px; }
+
+/* Image inside slot */
+.img-slot img {
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    border-radius: var(--img-slot-radius);
+    user-select: none;
+    -webkit-user-drag: none;
+}
+
+/* Placeholder text when empty */
+.img-slot:not(.has-image) {
+    font-family: var(--font-mono, monospace);
+    font-size: var(--small-size, 0.75rem);
+    color: inherit;
+    opacity: 0.5;
+}
+
+/* Image grid container */
+.img-slot-grid {
+    display: grid;
+    gap: clamp(0.5rem, 1.5vw, 1.5rem);
+    width: 100%;
+}
+.img-slot-grid[data-columns="2"] { grid-template-columns: repeat(2, 1fr); }
+.img-slot-grid[data-columns="3"] { grid-template-columns: repeat(3, 1fr); }
+.img-slot-grid[data-columns="4"] { grid-template-columns: repeat(4, 1fr); }
+.img-slot-grid[data-columns="5"] { grid-template-columns: repeat(5, 1fr); }
+.img-slot-grid[data-columns="6"] { grid-template-columns: repeat(6, 1fr); }
+
+/* Grid items override max-height (sized by grid) */
+.img-slot-grid .img-slot {
+    max-height: none;
+}
+
+/* Caption below image slot */
+.img-slot-caption {
+    font-family: var(--img-slot-caption-font);
+    font-size: var(--img-slot-caption-size);
+    margin-top: clamp(0.2rem, 0.5vw, 0.5rem);
+    opacity: 0.7;
+    line-height: 1.4;
+}
+
+/* ===========================================
    RESPONSIVE BREAKPOINTS
    Aggressive scaling for smaller viewports
    =========================================== */
@@ -134,6 +212,9 @@ img, .image-container {
     /* Stack grids vertically */
     .grid {
         grid-template-columns: 1fr;
+    }
+    .img-slot-grid {
+        grid-template-columns: 1fr !important;
     }
 }
 

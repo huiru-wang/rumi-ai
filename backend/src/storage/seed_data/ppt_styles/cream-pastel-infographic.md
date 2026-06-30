@@ -217,6 +217,14 @@ For technical or conceptual content, relationship maps, flows, state branches, a
 
 若需要使用来源 logo，应使用简化的首字母或文字标识替代真实品牌 logo，保持风格统一。
 
+**Image Slot 变量覆盖**（写入 `:root`）：
+
+```css
+--img-slot-radius: 8px;
+--img-slot-border: 2px solid var(--border, #1a1a1a);
+--img-slot-bg: #ffffff;
+```
+
 ## 7. Usage Guidelines — 生成新 PPT 时的使用说明
 
 ### 整体原则

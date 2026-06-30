@@ -15,7 +15,7 @@ from langchain_openai import ChatOpenAI
 from src.managers.prompt_manager import PromptManager
 from src.storage.database import Database
 from src.storage.file_store import FileStore
-from src.url_utils import build_style_resource_url
+from src.url_utils import build_style_extraction_resource_url, build_style_resource_url
 
 logger = logging.getLogger(__name__)
 
@@ -261,25 +261,28 @@ class StyleExtractManager:
                 bg_images = _extract_background_images(markdown_text)
                 if bg_images:
                     for bg in bg_images[:5]:  # 最多分析 5 张
-                        img_url = f"{resource_base_url}/resource/{bg['filename']}"
-                        analysis = await self._analyze_image_resource(img_url, bg['filename'])
+                        # manifest 直接存 API 代理 URL（浏览器可直接访问）
+                        img_url = build_style_extraction_resource_url(task_id, bg['filename'])
+                        # 视觉分析使用签名 URL（私有 bucket 需临时授权）
+                        img_key = f"{resource_prefix}/resource/{bg['filename']}"
+                        signed_url = self.file_store._provider.get_url(img_key)
+                        analysis = await self._analyze_image_resource(signed_url, bg['filename'])
+                        # 无论视觉分析是否成功，都加入 manifest（图片已在 OSS）
+                        resource_manifest.append({
+                            "filename": bg["filename"],
+                            "url": img_url,
+                            "used_in_slides": bg["slides"],
+                            "description": analysis or {},
+                        })
                         if analysis:
-                            resource_manifest.append({
-                                "filename": bg["filename"],
-                                "url": img_url,
-                                "used_in_slides": bg["slides"],
-                                "description": analysis,
-                            })
                             logger.info(f"[StyleExtract] image analysis: file={bg['filename']} analysis={analysis}")
                         else:
-                            logger.warning("[StyleExtract] vision FAILED or SKIPPED: %s (url=%s)", bg["filename"], img_url)
+                            logger.warning("[StyleExtract] vision FAILED or SKIPPED: %s (url=%s), added with empty description", bg["filename"], img_url)
 
                     if resource_manifest:
                         resource_section = _build_resource_section(resource_manifest)
                         markdown_text = markdown_text.rstrip() + "\n\n" + resource_section
                         logger.info("[StyleExtract] appended resource section: %d resources, md_len=%d", len(resource_manifest), len(markdown_text))
-                    else:
-                        logger.info("[StyleExtract] no vision results, resource_manifest is empty")
                 else:
                     logger.info("[StyleExtract] no background images found in markdown")
             elif media_files:
@@ -287,7 +290,7 @@ class StyleExtractManager:
                 bg_images = _extract_background_images(markdown_text)
                 logger.info("[StyleExtract] fallback mode (no vision/local): %d bg images, resource_base_url=%s", len(bg_images), bool(resource_base_url))
                 for bg in bg_images[:5]:
-                    img_url = f"{resource_base_url}/resource/{bg['filename']}" if resource_base_url else bg["filename"]
+                    img_url = build_style_extraction_resource_url(task_id, bg['filename'])
                     resource_manifest.append({
                         "filename": bg["filename"],
                         "url": img_url,

@@ -1,19 +1,25 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, Save, Check, Loader2, AlertCircle, Pencil, Maximize } from "lucide-react";
+import { X, Save, Check, Loader2, AlertCircle, Maximize } from "lucide-react";
 import { fetchFileContent, getTaskPreviewUrl, saveTaskFile, type Task, type PptStyleInfo } from "@/lib/api";
 
-// Script injected into iframe: handles edit mode sync + HTML export for save
-const EDIT_MODE_MONITOR_SCRIPT = `
+// Minimal script injected into iframe:
+// 1. Reports edit mode changes (E key) to parent
+// 2. Handles 'get-html-for-save': exits edit mode via editor, captures clean HTML, sends back
+const IFRAME_BRIDGE_SCRIPT = `
 (function() {
   var lastEditable = false;
 
-  // Monitor E key inside iframe and report mode change to parent
+  function isEditActive() {
+    return document.body.classList.contains('edit-active');
+  }
+
+  // Report edit-mode state changes to parent (triggered by PPT's own E key handler)
   document.addEventListener('keydown', function(e) {
     if (e.key === 'e' || e.key === 'E') {
       setTimeout(function() {
-        var editable = document.body.contentEditable === 'true' || document.body.isContentEditable;
+        var editable = isEditActive();
         if (editable !== lastEditable) {
           lastEditable = editable;
           window.parent.postMessage({ type: 'ppt-edit-mode-change', editable: editable }, '*');
@@ -22,19 +28,18 @@ const EDIT_MODE_MONITOR_SCRIPT = `
     }
   });
 
-  // Listen for commands from parent
   window.addEventListener('message', function(e) {
     if (!e.data || !e.data.type) return;
 
-    // Toggle edit mode from parent button
-    if (e.data.type === 'toggle-edit-mode') {
-      document.body.contentEditable = e.data.editable ? 'true' : 'false';
-      lastEditable = e.data.editable;
-      window.parent.postMessage({ type: 'ppt-edit-mode-change', editable: e.data.editable }, '*');
-    }
+    if (e.data.type === 'get-html-for-save') {
+      // Exit edit mode cleanly before capturing HTML
+      if (isEditActive() && typeof window.editor !== 'undefined' && typeof window.editor.toggleEditMode === 'function') {
+        window.editor.toggleEditMode();
+      }
+      lastEditable = false;
+      window.parent.postMessage({ type: 'ppt-edit-mode-change', editable: false }, '*');
 
-    // Export current HTML for save
-    if (e.data.type === 'get-html') {
+      // Capture clean HTML
       var html = '<!DOCTYPE html>\\n' + document.documentElement.outerHTML;
       window.parent.postMessage({ type: 'ppt-html-response', html: html }, '*');
     }
@@ -97,10 +102,16 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
         const html = await fetchFileContent(fileUrl);
         if (cancelled) return;
 
-        // Inject edit mode monitor script before </body> with markers for stripping on save
-        const injectedHtml = html.replace(
+        // Strip any stale monitor scripts left from previous saves before injecting fresh one
+        const cleanBase = html.replace(
+          /<!--PPT_PREVIEW_MONITOR_START-->[\s\S]*?<!--PPT_PREVIEW_MONITOR_END-->/g,
+          ""
+        );
+
+        // Inject bridge script before </body> with markers for stripping on save
+        const injectedHtml = cleanBase.replace(
           "</body>",
-          `<!--PPT_PREVIEW_MONITOR_START--><script>${EDIT_MODE_MONITOR_SCRIPT}</script><!--PPT_PREVIEW_MONITOR_END--></body>`
+          `<!--PPT_PREVIEW_MONITOR_START--><script>${IFRAME_BRIDGE_SCRIPT}</script><!--PPT_PREVIEW_MONITOR_END--></body>`
         );
         setPptHtml(injectedHtml);
         setIsLoading(false);
@@ -152,17 +163,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
     return () => document.removeEventListener("fullscreenchange", handleChange);
   }, []);
 
-  // Toggle edit mode: send command to iframe and update local state
-  const handleToggleEdit = useCallback(() => {
-    const newMode = !isEditMode;
-    iframeRef.current?.contentWindow?.postMessage(
-      { type: "toggle-edit-mode", editable: newMode },
-      "*"
-    );
-    setIsEditMode(newMode);
-  }, [isEditMode]);
-
-  // Save handler: close edit mode first, then request HTML and upload
+  // Save handler: tell iframe to exit edit mode + capture HTML, then upload
   const handleSave = useCallback(async () => {
     const iframe = iframeRef.current;
     if (!iframe?.contentWindow) {
@@ -175,15 +176,11 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
     setSaveError("");
 
     try {
-      // Close edit mode first to remove contenteditable from saved HTML
-      iframe.contentWindow.postMessage({ type: "toggle-edit-mode", editable: false }, "*");
-      setIsEditMode(false);
-
-      // Request current HTML from iframe via postMessage
+      // Ask iframe to exit edit mode and return clean HTML
       const htmlPromise = new Promise<string>((resolve) => {
         htmlResponseResolver.current = resolve;
       });
-      iframe.contentWindow.postMessage({ type: "get-html" }, "*");
+      iframe.contentWindow.postMessage({ type: "get-html-for-save" }, "*");
 
       // Wait for response with timeout
       const timeoutPromise = new Promise<string>((_, reject) =>
@@ -191,14 +188,15 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
       );
       const fullHtml = await Promise.race([htmlPromise, timeoutPromise]);
 
-      // Strip our injected monitor script (between markers) before saving
+      // Strip ALL injected bridge scripts before saving
       const cleanHtml = fullHtml.replace(
-        /<!--PPT_PREVIEW_MONITOR_START-->[\s\S]*?<!--PPT_PREVIEW_MONITOR_END-->/,
+        /<!--PPT_PREVIEW_MONITOR_START-->[\s\S]*?<!--PPT_PREVIEW_MONITOR_END-->/g,
         ""
       );
 
       await saveTaskFile(workspaceId, pptTask.id, cleanHtml);
       setSaveState("saved");
+      setIsEditMode(false);
       saveTimeoutRef.current = setTimeout(() => setSaveState("idle"), 2000);
     } catch (err) {
       setSaveState("error");
@@ -327,6 +325,10 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
               <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">→</kbd>
               翻页
             </span>
+            <span className="flex items-center gap-1.5">
+              <kbd className="rounded border border-border bg-muted px-1.5 py-0.5 text-[10px]">E</kbd>
+              编辑
+            </span>
           </div>
 
           {/* Center: title + style name */}
@@ -337,25 +339,15 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
             )}
           </div>
 
-          {/* Right: edit/save button + error message */}
+          {/* Right: save button + error message */}
           <div className="flex items-center gap-2">
             {saveState === "error" && saveError && (
               <span className="text-xs text-red-400">{saveError}</span>
             )}
-            {/* Combined edit/save button */}
-            {!isEditMode ? (
-              <button
-                onClick={handleToggleEdit}
-                className="flex items-center gap-1.5 rounded-lg bg-muted px-3 py-2 text-xs font-medium text-muted-foreground transition-colors hover:bg-muted/80 hover:text-foreground"
-                title="开启编辑模式"
-              >
-                <Pencil size={13} />
-                开启编辑模式
-              </button>
-            ) : (
+            {(isEditMode || saveState === "saving" || saveState === "saved") && (
               <button
                 onClick={handleSave}
-                disabled={saveState === "saving"}
+                disabled={saveState === "saving" || saveState === "saved"}
                 className={`flex items-center gap-1.5 rounded-lg px-3 py-2 text-xs font-medium transition-colors ${
                   saveState === "saved"
                     ? "bg-green-500/20 text-green-400"
