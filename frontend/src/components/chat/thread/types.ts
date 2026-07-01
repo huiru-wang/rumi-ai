@@ -12,6 +12,13 @@ export interface AITurn {
   toolMessages: any[];
 }
 
+export interface DisplayRun {
+  key: string;
+  run_id: string | null;
+  status: "history" | "active";
+  messages: any[];
+}
+
 export type RenderItem =
   | { kind: "reasoning"; key: string; text: string }
   | { kind: "text"; key: string; text: string }

@@ -7,6 +7,7 @@ import { EmptyState, TypingIndicator } from "./message-actions";
 import { InterruptBlock } from "./interrupt-block";
 import { ChatInput } from "./chat-input";
 import { MessageList } from "./message-list";
+import type { DisplayRun } from "./types";
 
 // ============================================================
 // Thread (root container — scroll management + layout)
@@ -14,10 +15,12 @@ import { MessageList } from "./message-list";
 
 export function Thread({
   visibleMessages,
+  visibleRuns,
   isLoading,
   interrupt,
 }: {
   visibleMessages: any[];
+  visibleRuns: DisplayRun[];
   isLoading: boolean;
   interrupt?: { value?: unknown };
 }) {
@@ -103,7 +106,7 @@ export function Thread({
             </div>
           )}
           {!hasMessages && <EmptyState />}
-          <MessageList messages={visibleMessages} />
+          <MessageList messages={visibleMessages} runs={visibleRuns} />
           <InterruptBlock />
           {isLoading && !isStreamingContent(visibleMessages) && <TypingIndicator />}
           {error && (
@@ -127,8 +130,21 @@ export function Thread({
 // ============================================================
 
 export function StableMessageList() {
-  const { messages } = useMessageContext();
+  const { messages, runs } = useMessageContext();
   const { isLoading, interrupt } = useStreamContext();
   const visibleMessages = messages.filter((m: any) => !isHiddenMessage(m));
-  return <Thread visibleMessages={visibleMessages} isLoading={isLoading} interrupt={interrupt} />;
+  const visibleRuns = runs
+    .map((run) => ({
+      ...run,
+      messages: run.messages.filter((m: any) => !isHiddenMessage(m)),
+    }))
+    .filter((run) => run.messages.length > 0);
+  return (
+    <Thread
+      visibleMessages={visibleMessages}
+      visibleRuns={visibleRuns}
+      isLoading={isLoading}
+      interrupt={interrupt}
+    />
+  );
 }

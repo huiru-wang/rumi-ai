@@ -9,6 +9,7 @@ __pycache__/
 # Node
 node_modules/
 .next/
+.pnpm-store/
 
 # Data (runtime generated)
 data/
@@ -33,3 +34,4 @@ backend/.env.production
 .claude/
 .qoder/
 debug/
+plan/

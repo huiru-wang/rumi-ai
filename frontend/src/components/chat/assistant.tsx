@@ -2,13 +2,18 @@
 
 import React, { useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useStream } from "@langchain/langgraph-sdk/react";
-import { updateWorkspaceThreadId, getWorkspace, listThreadMessages, type ThreadMessage } from "@/lib/api";
+import {
+  updateWorkspaceThreadId,
+  getWorkspace,
+  listThreadHistoryRuns,
+  type HistoryRun,
+  type ThreadMessage,
+} from "@/lib/api";
 import {
   createMessageDebugSnapshot,
-  getLiveMessagesAfterHistory,
-  shouldPreserveDisplayedMessages,
   shouldUseLiveMessages,
 } from "./message-display";
+import type { DisplayRun } from "./thread/types";
 
 const LANGGRAPH_API_URL =
   process.env.NEXT_PUBLIC_LANGGRAPH_API_URL || "http://localhost:2024";
@@ -44,6 +49,7 @@ interface StreamControlValue {
 
 interface MessageContextValue {
   messages: any[];
+  runs: DisplayRun[];
 }
 
 interface OptimisticHumanMessage {
@@ -53,6 +59,8 @@ interface OptimisticHumanMessage {
   _optimistic: true;
   pending: true;
 }
+
+type ChatHistoryRun = Omit<HistoryRun, "messages"> & { messages: any[] };
 
 const StreamControlContext = React.createContext<StreamControlValue>({
   isLoading: false,
@@ -67,7 +75,7 @@ const StreamControlContext = React.createContext<StreamControlValue>({
   threadId: null,
 });
 
-const MessageContext = React.createContext<MessageContextValue>({ messages: [] });
+const MessageContext = React.createContext<MessageContextValue>({ messages: [], runs: [] });
 
 /** For control-only consumers (ChatInput, InterruptBlock) — does NOT re-render on message changes. */
 export function useStreamContext() {
@@ -103,24 +111,29 @@ interface AssistantProps {
 
 export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, onPptTaskIdConsumed, externalCommand, onExternalCommandConsumed, children }: AssistantProps) {
   const [threadId, setThreadId] = useState<string | null>(null);
-  const [historyMessages, setHistoryMessages] = useState<any[]>([]);
+  const [historyRuns, setHistoryRuns] = useState<ChatHistoryRun[]>([]);
+  const [activeRunId, setActiveRunId] = useState<string | null>(null);
+  const [activeRunMessages, setActiveRunMessages] = useState<any[]>([]);
   const [optimisticMessages, setOptimisticMessages] = useState<OptimisticHumanMessage[]>([]);
   const [historyNextCursor, setHistoryNextCursor] = useState<number | null>(null);
   const [isInitialHistoryLoading, setIsInitialHistoryLoading] = useState(false);
   const [isLoadingOlderMessages, setIsLoadingOlderMessages] = useState(false);
   const summarizedIds = useRef<Set<string>>(new Set());
+  const restoredThreadRef = useRef<string | null>(null);
 
-  const loadHistoryMessages = useCallback(async (targetThreadId: string) => {
+  const loadHistoryRuns = useCallback(async (targetThreadId: string) => {
     debugMessageLog("history-load-start", { threadId: targetThreadId });
-    const page = await listThreadMessages(targetThreadId, { limit: MESSAGE_HISTORY_LIMIT });
-    const messages = page.messages.map(toLangGraphMessage).filter((message) => !isHiddenMessage(message));
+    const page = await listThreadHistoryRuns(targetThreadId, { limit: MESSAGE_HISTORY_LIMIT });
+    const runs = page.runs.map(toChatHistoryRun).filter((run) => run.messages.length > 0);
+    const messages = flattenHistoryRuns(runs);
     debugMessageLog("history-load-success", {
       threadId: targetThreadId,
+      runCount: runs.length,
       count: messages.length,
       last: summarizeMessageForLog(messages[messages.length - 1]),
       nextCursor: page.next_cursor,
     });
-    setHistoryMessages(messages);
+    setHistoryRuns(runs);
     setHistoryNextCursor(page.next_cursor);
   }, []);
 
@@ -129,14 +142,12 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
 
     setIsLoadingOlderMessages(true);
     try {
-      const page = await listThreadMessages(threadId, {
+      const page = await listThreadHistoryRuns(threadId, {
         limit: MESSAGE_HISTORY_LIMIT,
         before: historyNextCursor,
       });
-      const olderMessages = page.messages
-        .map(toLangGraphMessage)
-        .filter((message) => !isHiddenMessage(message));
-      setHistoryMessages((current) => mergeMessages(olderMessages, current));
+      const olderRuns = page.runs.map(toChatHistoryRun).filter((run) => run.messages.length > 0);
+      setHistoryRuns((current) => mergeHistoryRuns(olderRuns, current));
       setHistoryNextCursor(page.next_cursor);
     } finally {
       setIsLoadingOlderMessages(false);
@@ -154,17 +165,22 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
 
   useEffect(() => {
     if (!threadId) {
-      setHistoryMessages([]);
+      setHistoryRuns([]);
+      setActiveRunId(null);
+      setActiveRunMessages([]);
+      restoredThreadRef.current = null;
       setHistoryNextCursor(null);
       setIsInitialHistoryLoading(false);
       return;
     }
     let cancelled = false;
     setIsInitialHistoryLoading(true);
-    loadHistoryMessages(threadId)
+    loadHistoryRuns(threadId)
       .catch(() => {
         if (!cancelled) {
-          setHistoryMessages([]);
+          setHistoryRuns([]);
+          setActiveRunId(null);
+          setActiveRunMessages([]);
           setHistoryNextCursor(null);
         }
       })
@@ -174,7 +190,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         }
       });
     return () => { cancelled = true; };
-  }, [threadId, loadHistoryMessages]);
+  }, [threadId, loadHistoryRuns]);
 
   // Stable callbacks via refs — prevents useStream from seeing new references each render
   const threadIdRef = useRef(threadId);
@@ -217,7 +233,14 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       }
     }
     if (moved.length > 0) {
-      setHistoryMessages((prev) => mergeMessages(prev, moved));
+      setActiveRunMessages((prev) => mergeMessages(prev, moved));
+    }
+  }, []);
+
+  const handleRunCreated = useCallback((meta: { run_id?: string; thread_id?: string }) => {
+    if (meta.run_id) {
+      setActiveRunId(meta.run_id);
+      setActiveRunMessages([]);
     }
   }, []);
 
@@ -227,6 +250,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
     threadId,
     onThreadId: handleThreadId,
     onUpdateEvent: handleUpdateEvent,
+    onCreated: handleRunCreated,
     reconnectOnMount: true,
   });
 
@@ -234,6 +258,39 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
   if (stream.messages.length >= streamMessagesSnapshotRef.current.length) {
     streamMessagesSnapshotRef.current = stream.messages;
   }
+
+  const joinedRunRef = useRef<string | null>(null);
+  useEffect(() => {
+    if (!threadId || stream.isLoading) return;
+    if (restoredThreadRef.current === threadId) return;
+    restoredThreadRef.current = threadId;
+    let cancelled = false;
+    stream.client.runs
+      .list(threadId, { status: "running", limit: 1 })
+      .then((runs) => {
+        if (cancelled) return;
+        const run = runs[0];
+        if (!run || joinedRunRef.current === run.run_id) return;
+        joinedRunRef.current = run.run_id;
+        setActiveRunId(run.run_id);
+        stream.joinStream(run.run_id).catch((error) => {
+          debugMessageLog("active-run-join-error", {
+            threadId,
+            runId: run.run_id,
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
+      })
+      .catch((error) => {
+        debugMessageLog("active-run-list-error", {
+          threadId,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [threadId, stream.client, stream.isLoading, stream.joinStream]);
 
   // Auto-recover from stale threadId
   useEffect(() => {
@@ -260,6 +317,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
   // re-render. We batch updates to ~60fps via requestAnimationFrame and
   // stabilize message references so React.memo in child components works.
   const [displayedMessages, setDisplayMessages] = useState<any[]>([]);
+  const [displayedRuns, setDisplayRuns] = useState<DisplayRun[]>([]);
   const messageCacheRef = useRef<Map<string, any>>(new Map());
   const latestStreamRef = useRef<{ messages: any[]; isLoading: boolean }>({
     messages: [],
@@ -306,26 +364,23 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
           }
         }
 
-        // 3) Filter against history (inline liveMessages)
-        const live = getLiveMessagesAfterHistory({
-          historyMessages,
-          streamMessages: stableMessages,
-          getMessageKey: messageKey,
-        });
+        setActiveRunMessages(stableMessages);
         const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, stableMessages);
-
-        // 4) Merge history + live + optimistic. Optimistic messages must be
-        // appended after live stream messages because neither has a database
-        // _rowId yet, and stable sorting preserves insertion order for them.
-        const merged = mergeMessages(mergeMessages(historyMessages, live), optimistic);
+        const runs = buildDisplayedRuns({
+          historyRuns,
+          activeRunId,
+          activeRunMessages: stableMessages,
+          optimisticMessages: optimistic,
+        });
+        const merged = flattenDisplayRuns(runs);
         debugMessageSnapshotLog("display-raf", () =>
           createMessageDebugSnapshot({
             phase: "display-raf",
             threadId,
             isLoading: loading,
-            historyMessages,
+            historyMessages: flattenHistoryRuns(historyRuns),
             streamMessages: stableMessages,
-            liveMessages: live,
+            liveMessages: stableMessages,
             displayedMessages: merged,
             optimisticMessages: optimistic,
             getMessageKey: messageKey,
@@ -342,6 +397,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
           }
           return merged;
         });
+        setDisplayRuns(runs);
 
         // Chain another RAF if stream is still active (ensures smooth 60fps)
         if (loading) {
@@ -368,47 +424,30 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       });
       const sm = canUseLiveMessages ? rawMsgs ?? [] : [];
       const visible = sm.filter((m: any) => !isHiddenMessage(m));
-      const live = getLiveMessagesAfterHistory({
-        historyMessages,
-        streamMessages: visible,
-        getMessageKey: messageKey,
-      });
+      setActiveRunMessages(visible);
       const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, visible);
-      const merged = mergeMessages(mergeMessages(historyMessages, live), optimistic);
+      const runs = buildDisplayedRuns({
+        historyRuns,
+        activeRunId,
+        activeRunMessages: visible,
+        optimisticMessages: optimistic,
+      });
+      const merged = flattenDisplayRuns(runs);
       debugMessageLog("display-immediate", () =>
         createMessageDebugSnapshot({
           phase: "display-immediate",
           threadId,
           isLoading: stream.isLoading,
-          historyMessages,
+          historyMessages: flattenHistoryRuns(historyRuns),
           streamMessages: visible,
-          liveMessages: live,
+          liveMessages: visible,
           displayedMessages: merged,
           optimisticMessages: optimistic,
           getMessageKey: messageKey,
         }),
       );
-      setDisplayMessages((prev) => {
-        if (
-          shouldPreserveDisplayedMessages({
-            isLoading: stream.isLoading,
-            historyMessages,
-            streamMessages: visible,
-            liveMessages: live,
-            nextDisplayedMessages: merged,
-            previousDisplayedMessages: prev,
-            getMessageKey: messageKey,
-          })
-        ) {
-          debugMessageLog("display-preserve", {
-            reason: "missing-history-anchor-before-refresh",
-            previousCount: prev.length,
-            nextCount: merged.length,
-          });
-          return prev;
-        }
-        return merged;
-      });
+      setDisplayMessages(merged);
+      setDisplayRuns(runs);
     }
 
     return () => {
@@ -418,7 +457,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [stream.messages.length, stream.isLoading, historyMessages, optimisticMessages, threadId, isInitialHistoryLoading]);
+  }, [stream.messages.length, stream.isLoading, historyRuns, activeRunId, optimisticMessages, threadId, isInitialHistoryLoading]);
 
   const wasLoadingRef = useRef(stream.isLoading);
   useEffect(() => {
@@ -432,8 +471,8 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         last: summarizeMessageForLog(stream.messages[stream.messages.length - 1]),
       },
       history: {
-        count: historyMessages.length,
-        last: summarizeMessageForLog(historyMessages[historyMessages.length - 1]),
+        count: flattenHistoryRuns(historyRuns).length,
+        last: summarizeMessageForLog(flattenHistoryRuns(historyRuns).at(-1)),
       },
       displayed: {
         count: displayedMessages.length,
@@ -442,14 +481,19 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
       error: stream.error instanceof Error ? stream.error.message : stream.error ? String(stream.error) : null,
     });
     if (threadId && !isUserCancelledError(stream.error)) {
-      loadHistoryMessages(threadId).catch((error) => {
+      loadHistoryRuns(threadId).then(() => {
+        setActiveRunId(null);
+        setActiveRunMessages([]);
+        setOptimisticMessages([]);
+        joinedRunRef.current = null;
+      }).catch((error) => {
         debugMessageLog("history-load-after-finish-error", {
           threadId,
           error: error instanceof Error ? error.message : String(error),
         });
       });
     }
-  }, [stream.isLoading, stream.messages, historyMessages, displayedMessages, threadId, stream.error, loadHistoryMessages]);
+  }, [stream.isLoading, stream.messages, historyRuns, displayedMessages, threadId, stream.error, loadHistoryRuns]);
 
   useEffect(() => {
     setOptimisticMessages((current) => {
@@ -532,7 +576,8 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
 
   const messageValue = useMemo<MessageContextValue>(() => ({
     messages: displayedMessages,
-  }), [displayedMessages]);
+    runs: displayedRuns,
+  }), [displayedMessages, displayedRuns]);
 
   return (
     <StreamControlContext.Provider value={controlValue}>
@@ -549,6 +594,8 @@ function toLangGraphMessage(message: ThreadMessage) {
   return {
     id: message.message_id,
     _rowId: message.id, // database auto-increment id for stable ordering
+    _runId: message.run_id,
+    run_id: message.run_id,
     type: message.type || message.role,
     content: message.content,
     tool_calls: message.tool_calls ?? [],
@@ -557,6 +604,78 @@ function toLangGraphMessage(message: ThreadMessage) {
     additional_kwargs: message.additional_kwargs ?? {},
     response_metadata: message.response_metadata ?? {},
   };
+}
+
+function toChatHistoryRun(run: HistoryRun): ChatHistoryRun {
+  return {
+    ...run,
+    messages: run.messages
+      .map(toLangGraphMessage)
+      .filter((message) => !isHiddenMessage(message)),
+  };
+}
+
+function flattenHistoryRuns(runs: ChatHistoryRun[]) {
+  return runs.flatMap((run) => run.messages);
+}
+
+function historyRunKey(run: ChatHistoryRun) {
+  return run.run_id ? `run:${run.run_id}` : `legacy:${run.first_row_id}`;
+}
+
+function mergeHistoryRuns(olderRuns: ChatHistoryRun[], currentRuns: ChatHistoryRun[]) {
+  const seen = new Set<string>();
+  const merged: ChatHistoryRun[] = [];
+  for (const run of [...olderRuns, ...currentRuns]) {
+    const key = historyRunKey(run);
+    if (seen.has(key)) continue;
+    seen.add(key);
+    merged.push(run);
+  }
+  merged.sort((a, b) => a.first_row_id - b.first_row_id);
+  return merged;
+}
+
+function buildDisplayedRuns({
+  historyRuns,
+  activeRunId,
+  activeRunMessages,
+  optimisticMessages,
+}: {
+  historyRuns: ChatHistoryRun[];
+  activeRunId: string | null;
+  activeRunMessages: any[];
+  optimisticMessages: OptimisticHumanMessage[];
+}): DisplayRun[] {
+  const persistedRuns =
+    activeRunId == null
+      ? historyRuns
+      : historyRuns.filter((run) => run.run_id !== activeRunId);
+  const displayRuns: DisplayRun[] = persistedRuns.map((run) => ({
+    key: historyRunKey(run),
+    run_id: run.run_id,
+    status: "history",
+    messages: run.messages,
+  }));
+  const persistedMessageKeys = new Set(
+    persistedRuns.flatMap((run) => run.messages).map(messageKey),
+  );
+  const activeMessages = mergeMessages(activeRunMessages, optimisticMessages).filter(
+    (message) => !persistedMessageKeys.has(messageKey(message)),
+  );
+  if (activeMessages.length > 0) {
+    displayRuns.push({
+      key: activeRunId ? `active:${activeRunId}` : "active:pending",
+      run_id: activeRunId,
+      status: "active",
+      messages: activeMessages,
+    });
+  }
+  return displayRuns;
+}
+
+function flattenDisplayRuns(runs: DisplayRun[]) {
+  return runs.flatMap((run) => run.messages);
 }
 
 function messageKey(message: any): string {

@@ -117,6 +117,7 @@ export interface ThreadMessage {
   id: number;
   thread_id: string;
   workspace_id: string | null;
+  run_id: string | null;
   message_id: string;
   role: string;
   type: string;
@@ -135,6 +136,22 @@ export interface ThreadMessagesPage {
   next_cursor: number | null;
 }
 
+export interface HistoryRun {
+  run_id: string | null;
+  thread_id: string;
+  workspace_id: string | null;
+  first_row_id: number;
+  last_row_id: number;
+  created_at: string;
+  updated_at: string;
+  messages: ThreadMessage[];
+}
+
+export interface HistoryRunsPage {
+  runs: HistoryRun[];
+  next_cursor: number | null;
+}
+
 /**
  * List thread messages with turn-based pagination.
  * ``limit`` controls the number of *turns* (a turn = 1 human + following AI/tool messages).
@@ -147,6 +164,21 @@ export function listThreadMessages(
   params.set("limit", String(options.limit ?? 10));
   if (options.before) params.set("before", String(options.before));
   return request(`/api/threads/${encodeURIComponent(threadId)}/messages?${params.toString()}`);
+}
+
+/**
+ * List thread history grouped by LangGraph run.
+ * ``limit`` controls the number of history runs. ``before`` is the oldest
+ * loaded HistoryRun.first_row_id.
+ */
+export function listThreadHistoryRuns(
+  threadId: string,
+  options: { limit?: number; before?: number | null } = {}
+): Promise<HistoryRunsPage> {
+  const params = new URLSearchParams();
+  params.set("limit", String(options.limit ?? 10));
+  if (options.before) params.set("before", String(options.before));
+  return request(`/api/threads/${encodeURIComponent(threadId)}/history-runs?${params.toString()}`);
 }
 
 export function getMessageDetail(

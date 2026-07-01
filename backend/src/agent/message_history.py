@@ -1,9 +1,10 @@
 import logging
+from collections.abc import Awaitable, Callable
 from typing import Any
 
 from langchain.agents.middleware import AgentMiddleware
 from langchain_core.callbacks import AsyncCallbackHandler
-from langchain_core.messages import BaseMessage
+from langchain_core.messages import AIMessage, BaseMessage, ToolMessage
 
 from src.storage.database import Database
 
@@ -21,6 +22,7 @@ class MessageHistoryCallback(AsyncCallbackHandler):
         *,
         thread_id: str | None,
         workspace_id: str | None,
+        run_id: str | None,
         messages: list[Any],
     ) -> None:
         if not thread_id:
@@ -36,6 +38,7 @@ class MessageHistoryCallback(AsyncCallbackHandler):
             await self.db.record_message(
                 thread_id=thread_id,
                 workspace_id=workspace_id,
+                run_id=run_id,
                 **record,
             )
 
@@ -44,7 +47,14 @@ class MessageHistoryCallback(AsyncCallbackHandler):
         if role not in {"human", "ai", "tool"}:
             return None
 
-        message_id = getattr(message, "id", None) or self._dict_get(message, "id") or fallback_id
+        tool_call_id = getattr(message, "tool_call_id", None) or self._dict_get(
+            message, "tool_call_id"
+        )
+        message_id = (
+            f"tool:{tool_call_id}"
+            if role == "tool" and tool_call_id
+            else getattr(message, "id", None) or self._dict_get(message, "id") or fallback_id
+        )
         content = getattr(message, "content", None)
         if content is None:
             content = self._dict_get(message, "content", "")
@@ -55,7 +65,7 @@ class MessageHistoryCallback(AsyncCallbackHandler):
             "type": role,
             "content": content,
             "tool_calls": self._message_tool_calls(message),
-            "tool_call_id": getattr(message, "tool_call_id", None) or self._dict_get(message, "tool_call_id"),
+            "tool_call_id": tool_call_id,
             "name": getattr(message, "name", None) or self._dict_get(message, "name"),
             "additional_kwargs": getattr(message, "additional_kwargs", None)
             or self._dict_get(message, "additional_kwargs", {}),
@@ -111,20 +121,60 @@ class MessageHistoryMiddleware(AgentMiddleware):
         self.callback = callback
 
     async def abefore_agent(self, state: dict, runtime) -> None:
-        await self._record_state_messages(state, runtime)
+        await self._record_messages(state, runtime, self._current_user_messages(state))
+
+    async def aafter_model(self, state: dict, runtime) -> None:
+        await self._record_messages(state, runtime, self._current_ai_messages(state))
+
+    async def awrap_tool_call(
+        self,
+        request,
+        handler: Callable[[Any], Awaitable[ToolMessage | Any]],
+    ) -> ToolMessage | Any:
+        result = await handler(request)
+        if isinstance(result, ToolMessage):
+            await self._record_messages(request.state, request.runtime, [result])
+        return result
 
     async def aafter_agent(self, state: dict, runtime) -> None:
         await self._record_state_messages(state, runtime)
 
     async def _record_state_messages(self, state: dict, runtime) -> None:
+        await self._record_messages(state, runtime, state.get("messages", []))
+
+    async def _record_messages(self, state: dict, runtime, messages: list[Any]) -> None:
         try:
             await self.callback.record_messages(
                 thread_id=self._thread_id(runtime),
                 workspace_id=state.get("workspace_id"),
-                messages=state.get("messages", []),
+                run_id=self._run_id(runtime),
+                messages=messages,
             )
         except Exception:
             logger.exception("Failed to persist message history")
+
+    def _current_user_messages(self, state: dict) -> list[Any]:
+        messages = state.get("messages", [])
+        if not messages:
+            return []
+        last = messages[-1]
+        return [last] if self.callback._message_role(last) == "human" else []
+
+    def _current_ai_messages(self, state: dict) -> list[Any]:
+        messages = state.get("messages", [])
+        if not messages:
+            return []
+        last = messages[-1]
+        if isinstance(last, AIMessage):
+            return [last]
+        if isinstance(last, dict) and self.callback._message_role(last) == "ai":
+            return [last]
+        return []
+
+    def _run_id(self, runtime) -> str | None:
+        execution_info = getattr(runtime, "execution_info", None)
+        run_id = getattr(execution_info, "run_id", None)
+        return str(run_id) if run_id else None
 
     def _thread_id(self, runtime) -> str | None:
         execution_info = getattr(runtime, "execution_info", None)

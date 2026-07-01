@@ -271,6 +271,22 @@ async def list_thread_messages(
     return success_response(data)
 
 
+@app.get("/api/threads/{thread_id}/history-runs")
+async def list_thread_history_runs(
+    thread_id: str,
+    limit: int = Query(default=10, ge=1, le=100),
+    before: int | None = Query(default=None, ge=1),
+):
+    logger.info(
+        "[API] GET /api/threads/%s/history-runs limit=%s before=%s",
+        thread_id,
+        limit,
+        before,
+    )
+    data = await db.list_thread_history_runs(thread_id, limit=limit, before=before)
+    return success_response(data)
+
+
 @app.get("/api/threads/{thread_id}/messages/{message_id}")
 async def get_message_detail(thread_id: str, message_id: str):
     logger.info(

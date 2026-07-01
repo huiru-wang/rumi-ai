@@ -61,6 +61,7 @@ class Database:
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 thread_id TEXT NOT NULL,
                 workspace_id TEXT,
+                run_id TEXT,
                 message_id TEXT NOT NULL,
                 role TEXT NOT NULL,
                 type TEXT NOT NULL,
@@ -182,6 +183,7 @@ class Database:
         if message_columns:
             for column, ddl in {
                 "workspace_id": "ALTER TABLE message ADD COLUMN workspace_id TEXT",
+                "run_id": "ALTER TABLE message ADD COLUMN run_id TEXT",
                 "tool_calls": "ALTER TABLE message ADD COLUMN tool_calls TEXT",
                 "tool_call_id": "ALTER TABLE message ADD COLUMN tool_call_id TEXT",
                 "name": "ALTER TABLE message ADD COLUMN name TEXT",
@@ -191,6 +193,12 @@ class Database:
             }.items():
                 if column not in message_columns:
                     await self.connection.execute(ddl)
+            await self.connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_message_thread_run ON message(thread_id, run_id)"
+            )
+            await self.connection.execute(
+                "CREATE INDEX IF NOT EXISTS idx_message_run ON message(run_id)"
+            )
 
         # ppt_style: add resource_manifest column
         cursor = await self.connection.execute("PRAGMA table_info(ppt_style)")
@@ -436,6 +444,7 @@ class Database:
         *,
         thread_id: str,
         workspace_id: str | None,
+        run_id: str | None = None,
         message_id: str,
         role: str,
         content: Any,
@@ -452,13 +461,14 @@ class Database:
         cursor = await self.connection.execute(
             """
             INSERT INTO message (
-                thread_id, workspace_id, message_id, role, type, content,
+                thread_id, workspace_id, run_id, message_id, role, type, content,
                 tool_calls, tool_call_id, name, additional_kwargs, response_metadata,
                 created_at, updated_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             ON CONFLICT(thread_id, message_id, role) DO UPDATE SET
                 workspace_id = excluded.workspace_id,
+                run_id = COALESCE(message.run_id, excluded.run_id),
                 type = excluded.type,
                 content = excluded.content,
                 tool_calls = excluded.tool_calls,
@@ -472,6 +482,7 @@ class Database:
             (
                 thread_id,
                 workspace_id,
+                run_id,
                 message_id,
                 role,
                 message_type,
@@ -549,6 +560,165 @@ class Database:
             "next_cursor": int(oldest_turn_id) if has_more else None,
         }
 
+    async def list_thread_history_runs(
+        self,
+        thread_id: str,
+        *,
+        limit: int = 10,
+        before: int | None = None,
+    ) -> dict:
+        """Return chat history grouped by LangGraph run.
+
+        ``limit`` controls the number of history runs. ``before`` is the
+        ``first_row_id`` of the oldest run from the previous page. Messages
+        without a run_id are grouped by the legacy human-turn boundary.
+        """
+        await self.ensure_initialized()
+        safe_limit = min(max(limit, 1), 100)
+
+        groups = await self._thread_history_run_groups(thread_id, before=before)
+        if not groups:
+            return {"runs": [], "next_cursor": None}
+
+        page_groups = groups[:safe_limit]
+        runs = []
+        for group in reversed(page_groups):
+            messages = await self._thread_history_run_messages(thread_id, group)
+            if not messages:
+                continue
+            runs.append(
+                {
+                    "run_id": group["run_id"],
+                    "thread_id": thread_id,
+                    "workspace_id": group["workspace_id"],
+                    "first_row_id": group["first_row_id"],
+                    "last_row_id": group["last_row_id"],
+                    "created_at": group["created_at"],
+                    "updated_at": group["updated_at"],
+                    "messages": messages,
+                }
+            )
+
+        has_more = len(groups) > safe_limit
+        next_cursor = page_groups[-1]["first_row_id"] if has_more else None
+        return {"runs": runs, "next_cursor": next_cursor}
+
+    async def _thread_history_run_groups(
+        self,
+        thread_id: str,
+        *,
+        before: int | None,
+    ) -> list[dict]:
+        params: list[Any] = [thread_id]
+        before_clause = ""
+        if before is not None:
+            before_clause = "AND id < ?"
+            params.append(before)
+
+        cursor = await self.connection.execute(
+            f"""
+            SELECT
+                run_id,
+                MIN(id) AS first_row_id,
+                MAX(id) AS last_row_id,
+                MIN(created_at) AS created_at,
+                MAX(updated_at) AS updated_at,
+                MAX(workspace_id) AS workspace_id
+            FROM message
+            WHERE thread_id = ? AND run_id IS NOT NULL {before_clause}
+            GROUP BY run_id
+            """,
+            params,
+        )
+        groups = [
+            {
+                "run_id": row["run_id"],
+                "first_row_id": int(row["first_row_id"]),
+                "last_row_id": int(row["last_row_id"]),
+                "created_at": row["created_at"],
+                "updated_at": row["updated_at"],
+                "workspace_id": row["workspace_id"],
+            }
+            for row in await cursor.fetchall()
+        ]
+
+        groups.extend(await self._legacy_null_run_groups(thread_id, before=before))
+        groups.sort(key=lambda group: group["last_row_id"], reverse=True)
+        return groups
+
+    async def _legacy_null_run_groups(
+        self,
+        thread_id: str,
+        *,
+        before: int | None,
+    ) -> list[dict]:
+        params: list[Any] = [thread_id]
+        before_clause = ""
+        if before is not None:
+            before_clause = "AND id < ?"
+            params.append(before)
+
+        cursor = await self.connection.execute(
+            f"""
+            SELECT *
+            FROM message
+            WHERE thread_id = ? AND run_id IS NULL {before_clause}
+            ORDER BY id ASC
+            """,
+            params,
+        )
+        rows = await cursor.fetchall()
+        groups: list[dict] = []
+        current_rows: list[aiosqlite.Row] = []
+
+        for row in rows:
+            if row["role"] == "human" and current_rows:
+                groups.append(self._history_group_from_rows(None, current_rows))
+                current_rows = []
+            current_rows.append(row)
+
+        if current_rows:
+            groups.append(self._history_group_from_rows(None, current_rows))
+
+        return groups
+
+    def _history_group_from_rows(
+        self,
+        run_id: str | None,
+        rows: list[aiosqlite.Row],
+    ) -> dict:
+        return {
+            "run_id": run_id,
+            "first_row_id": int(rows[0]["id"]),
+            "last_row_id": int(rows[-1]["id"]),
+            "created_at": rows[0]["created_at"],
+            "updated_at": max(row["updated_at"] for row in rows),
+            "workspace_id": next((row["workspace_id"] for row in rows if row["workspace_id"]), None),
+        }
+
+    async def _thread_history_run_messages(
+        self,
+        thread_id: str,
+        group: dict,
+    ) -> list[dict]:
+        if group["run_id"] is not None:
+            cursor = await self.connection.execute(
+                "SELECT * FROM message WHERE thread_id = ? AND run_id = ? ORDER BY id ASC",
+                [thread_id, group["run_id"]],
+            )
+        else:
+            cursor = await self.connection.execute(
+                """
+                SELECT *
+                FROM message
+                WHERE thread_id = ? AND run_id IS NULL AND id >= ? AND id <= ?
+                ORDER BY id ASC
+                """,
+                [thread_id, group["first_row_id"], group["last_row_id"]],
+            )
+        rows = await cursor.fetchall()
+        return [self._message_row_to_dict(row, strip_tool_content=True) for row in rows]
+
     def _message_row_to_dict(self, row: aiosqlite.Row, *, strip_tool_content: bool = False) -> dict:
         content = self._load_json(row["content"], "")
         # Strip tool message content in list response to reduce payload size;
@@ -559,6 +729,7 @@ class Database:
             "id": int(row["id"]),
             "thread_id": row["thread_id"],
             "workspace_id": row["workspace_id"],
+            "run_id": row["run_id"],
             "message_id": row["message_id"],
             "role": row["role"],
             "type": row["type"],
