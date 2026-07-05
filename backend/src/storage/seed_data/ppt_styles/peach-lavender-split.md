@@ -78,6 +78,64 @@ https://fonts.loli.net/css2?family=Outfit:wght@400;500;700;800&family=Noto+Sans+
 
 整体采用左右分屏布局，左侧约占 38–45%，右侧约占 55–62%。所有页面全屏显示，四周保留响应式安全边距。
 
+### Normalized Page Layouts — page_layouts
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.pastel_split_hero
+        name: 桃紫分屏封面
+        best_for: 轻松宣讲、知识分享、课程开场
+        structure: 左侧蜜桃标题区 + 右侧薰衣草标签组与金句模块
+        capacity: 1 个主标题、1 个副标题、1 条金句、3-5 个模块标签
+  agenda:
+    enabled: false
+    display_name: 目录页
+    variants: []
+    fallback: 本风格没有原生目录页；如必须展示结构，使用 content.rule_cards 的卡片入口。
+  section:
+    enabled: false
+    display_name: 章节页
+    variants: []
+    fallback: 使用左侧分栏的章节编号和巨型编号水印表达章节感，不单独生成章节页。
+  content:
+    enabled: true
+    display_name: 内容页
+    variants:
+      - id: content.rule_cards
+        name: 规则卡片型
+        best_for: 规则清单、知识点卡片、代码示例集合
+        structure: 左侧章节编号/标题 + 右侧 2x2 或 2x3 半透明规则卡片
+        capacity: 4-6 张规则卡片，每张 1 标签 + 1 规则 + 1 示例
+      - id: content.rule_list
+        name: 规则列表型
+        best_for: 操作建议、注意事项、流程条目、短规则列表
+        structure: 左侧章节编号/标题 + 右侧纵向规则条目列表
+        capacity: 4-6 个列表项，每项 1 图标 + 1 文本 + 1 示例
+  closing:
+    enabled: true
+    display_name: 封底页
+    variants:
+      - id: closing.split_cta
+        name: 桃紫分屏行动页
+        best_for: 总结、行动按钮、课程收束
+        structure: 左侧右对齐宣言标题 + 右侧说明文字、标签组和行动按钮
+        capacity: 1 个结语标题、1 段说明、1 组标签、1 个按钮
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
 ### Cover / 封面页
 
 出现频次：1 页

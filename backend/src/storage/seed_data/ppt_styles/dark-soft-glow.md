@@ -67,6 +67,74 @@ https://fonts.loli.net/css2?family=Cormorant:ital,wght@0,400;0,600;1,400;1,600&f
 
 ## 4. Layout Grammar — 布局语法
 
+### Normalized Page Layouts — page_layouts
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.centered_glow_hero
+        name: 居中柔光英雄页
+        best_for: 高端宣讲、品牌发布、情绪化主题开场
+        structure: 深色全屏 + 柔焦光晕 + 细垂直装饰线 + 居中大标题
+        capacity: 1 个主标题、1 个英文副标题、1 行说明
+  agenda:
+    enabled: false
+    display_name: 目录页
+    variants: []
+    fallback: 本风格没有原生目录页；高端叙事型 deck 通常直接进入内容。
+  section:
+    enabled: false
+    display_name: 章节页
+    variants: []
+    fallback: 通过 content.statement_quote 或标题页式内容页完成情绪转场。
+  content:
+    enabled: true
+    display_name: 内容页
+    variants:
+      - id: content.statement_quote
+        name: 金句陈述型
+        best_for: 核心判断、品牌主张、章节内情绪高潮
+        structure: 全屏居中，大号斜体引用 + 一行补充说明
+        capacity: 1 条 2 行以内引用、1 行说明
+      - id: content.three_feature_cards
+        name: 三列卡片型
+        best_for: 三项价值、三类能力、并列卖点
+        structure: 顶部居中标题 + 三等分深色卡片网格
+        capacity: 3 个卡片，每项 1 图标 + 1 标题 + 2-3 行说明
+      - id: content.metric_cards
+        name: 数据卡片型
+        best_for: 奖项、金额、名次、核心数字
+        structure: 顶部居中标题 + 三等分数据卡片，中间可 featured 放大
+        capacity: 3 个数据卡片，每项 1 个大数字 + 1 行说明
+      - id: content.vertical_steps
+        name: 流程步骤型
+        best_for: 方法步骤、申请流程、执行路径
+        structure: 顶部居中标题 + 垂直编号列表 + subtle 分割线
+        capacity: 3-5 个步骤
+  closing:
+    enabled: true
+    display_name: 封底页
+    variants:
+      - id: closing.centered_cta
+        name: 居中行动封底
+        best_for: 结束语、行动号召、品牌收束
+        structure: 深色柔光背景 + 居中结语标题 + 说明 + 胶囊按钮
+        capacity: 1 个结语标题、1 行说明、1 个 CTA
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
 ### Cover / 封面页
 
 出现频次：1 页

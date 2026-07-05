@@ -118,13 +118,17 @@ description: 以深蓝为主调的正式商务风格，卡片式信息分区，�
 
 ## 4. 页面类型聚合，而非按页枚举
 
-根据解析报告识别页面类型，将相同结构的页面聚合为一种模板。常见类型：
+根据解析报告识别页面类型，将相同结构的页面聚合为一种模板。固定页面类型只有：封面页 / 目录页 / 章节页 / 内容页 / 封底页。
 
-- **Cover / 封面页**
-- **TOC / 目录页**
-- **Section / 章节过渡页**
-- **Content / 内容页**
-- **Closing / 结尾页**
+内部 `page_type` 枚举只能使用：
+
+| page_type | display_name |
+|---|---|
+| `cover` | 封面页 |
+| `agenda` | 目录页 |
+| `section` | 章节页 |
+| `content` | 内容页 |
+| `closing` | 封底页 |
 
 对每种页面类型，描述：
 
@@ -134,6 +138,50 @@ description: 以深蓝为主调的正式商务风格，卡片式信息分区，�
 - 核心元素及其相对位置
 - 占位符命名
 - 文本颜色规则
+
+同时必须在「## 4. Layout Grammar — 布局语法」开头输出标准化能力图，格式如下：
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.variant_name
+        name: 中文布局名
+        best_for: 适合什么内容意图
+        structure: 相对位置描述
+        capacity: 可承载的信息量
+  agenda:
+    enabled: true/false
+    display_name: 目录页
+    variants: []
+    fallback: 不支持时如何跳过或降级
+  section:
+    enabled: true/false
+    display_name: 章节页
+    variants: []
+  content:
+    enabled: true
+    display_name: 内容页
+    variants: []
+  closing:
+    enabled: true/false
+    display_name: 封底页
+    variants: []
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
+`layout_variant` 的 ID 必须使用 `<page_type>.<semantic_name>`，例如 `content.split_text_visual`。`name` 必须是中文布局名，例如「左文右图型」。如果原 PPT 没有目录页或章节页，对应页面类型必须保留但设置 `enabled: false`，不要编造不存在的页面类型。
 
 禁止罗列精确坐标（pt/px）。使用相对位置描述：顶部、底部、左侧、居中、分栏、网格、卡片阵列等。百分比仅作为「参考」，不是约束。
 

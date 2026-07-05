@@ -75,6 +75,79 @@ https://fonts.loli.net/css2?family=Archivo+Black&family=Archivo:wght@400;500;600
 
 ## 4. Layout Grammar — 布局语法
 
+### Normalized Page Layouts — page_layouts
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.light_infographic
+        name: 轻彩信息图封面
+        best_for: 知识分享、趋势解读、专题开场、轻量报告
+        structure: 奶白纸底 + 深墨灰外框 + 左侧大标题 + 右侧纵向糖果色条目卡片
+        capacity: 1 个主标题、1 个副标题、3 个条目入口、1 行底部说明
+  agenda:
+    enabled: false
+    display_name: 目录页
+    variants: []
+    fallback: 本风格没有原生目录页；如必须展示结构，使用 content.three_card_columns 或 content.segment_bar。
+  section:
+    enabled: false
+    display_name: 章节页
+    variants: []
+    fallback: 使用顶部药丸标签、标题和颜色模块完成轻量转场，不单独生成章节页。
+  content:
+    enabled: true
+    display_name: 内容页
+    variants:
+      - id: content.data_poster
+        name: 数据大字报页
+        best_for: KPI、百分比、关键数字、趋势摘要
+        structure: 顶部药丸标签 + 左侧超大数字 + 右侧标题与来源 + 底部分隔说明
+        capacity: 1 个核心数字、1 个标题、1-2 行来源或洞察
+      - id: content.comparison_columns
+        name: 双栏对比型
+        best_for: Before/After、新旧对比、方案差异
+        structure: 左右 1:1 卡片 + 中央箭头或连接线 + 底部解说条
+        capacity: 2 个对比对象，每栏 3-5 个要点
+      - id: content.segment_bar
+        name: 横向分段条型
+        best_for: 占比构成、阶段拆分、分类比例
+        structure: 横向糖果色分段条 + 二级标题 + 3-5 个药丸标签
+        capacity: 3-5 个分段或标签
+      - id: content.three_card_columns
+        name: 三栏卡片型
+        best_for: 三个原则、三类问题、三项方案
+        structure: 顶部主标题 + 三张等宽彩色卡片 + 可选底部解说
+        capacity: 3 个并列观点，每项 1 标题 + 2-3 行说明
+      - id: content.two_info_cards
+        name: 双栏信息卡型
+        best_for: 双角色、双方案、职责/要求/技术结构化信息
+        structure: 顶部标签 + 左右两张糖果色或白底信息卡
+        capacity: 2 个信息对象，每个 3 个结构化字段
+  closing:
+    enabled: true
+    display_name: 封底页
+    variants:
+      - id: closing.center_statement
+        name: 轻彩中央结语页
+        best_for: 总结、行动号召、结论收束
+        structure: 奶白底或糖果色块拼贴 + 中央大号结语标题 + 底部说明
+        capacity: 1 个结语标题、1-2 行总结说明
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
 ### Layout Preference — 轻彩信息图倾向
 
 This style works best as a light pastel infographic system. Prefer compact color modules, small labels, arrows, connectors, grouped annotations, and airy diagrams over oversized solid panels.

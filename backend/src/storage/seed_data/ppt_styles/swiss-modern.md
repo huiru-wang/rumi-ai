@@ -64,6 +64,84 @@ description: 以安全橙为单一强调色的瑞士国际主义风格，强调�
 
 页面类型聚合如下：
 
+### Normalized Page Layouts — page_layouts
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.orange_poster
+        name: 安全橙海报封面
+        best_for: 开场警示、企业宣讲、安全宣贯、强主题标题
+        structure: 全屏强调色背景 + 顶部页眉 + 中央超大标题 + 底部说明
+        capacity: 1 个主标题、1 个副标题或说明、少量元数据
+  agenda:
+    enabled: false
+    display_name: 目录页
+    variants: []
+    fallback: 本风格没有原生目录页；精简 deck 直接跳过，必要时使用 content.four_column_cards 作为结构入口。
+  section:
+    enabled: false
+    display_name: 章节页
+    variants: []
+    fallback: 本风格通过明暗节奏和内容页标题完成转场，不单独生成章节页。
+  content:
+    enabled: true
+    display_name: 内容页
+    variants:
+      - id: content.kpi_tower
+        name: KPI 数据塔
+        best_for: 指标比较、排名、关键数据冲击
+        structure: 底部对齐垂直柱塔 + 顶部小图标 + 强调最高项
+        capacity: 3-6 个可比较数据点
+      - id: content.four_column_cards
+        name: 四列卡片型
+        best_for: 原则、模块、并列分类、责任分工
+        structure: 四列等宽卡片，每列顶部编号，重点列反转强调
+        capacity: 4 个并列观点，每项 1 标题 + 2-3 行说明
+      - id: content.timeline
+        name: 横向时间线
+        best_for: 阶段、流程节点、演进路径
+        structure: 中央水平虚线轴 + 节点上下交错
+        capacity: 4-6 个时间或阶段节点
+      - id: content.comparison_columns
+        name: 双栏对比型
+        best_for: 新旧对比、问题与改进、方案权衡
+        structure: 左右两栏 + 中央竖线 + 右侧强调项
+        capacity: 2 个对比对象，每栏 3-5 个要点
+      - id: content.cycle_diagram
+        name: 闭环图示型
+        best_for: 循环机制、反馈闭环、治理链路
+        structure: 左文右图，右侧同心圆环与箭头闭环
+        capacity: 1 个机制说明 + 4-6 个闭环节点
+      - id: content.six_grid_cards
+        name: 六宫格卡片型
+        best_for: 清单、能力矩阵、分类概览
+        structure: 3x2 卡片网格，末张或重点项用强调色
+        capacity: 6 个短要点
+  closing:
+    enabled: true
+    display_name: 封底页
+    variants:
+      - id: closing.split_manifesto
+        name: 分栏宣言封底
+        best_for: 结论收束、责任宣言、行动号召
+        structure: 左侧强调色宣言 + 右侧白底要点列表
+        capacity: 1 个结语标题、3 条收束要点、署名或日期
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
 ### Cover / 封面页
 - 出现频次：1 次
 - 布局结构：全屏单色背景，中央放置超大主标题，顶部为页眉标签，底部为说明文字与翻页提示

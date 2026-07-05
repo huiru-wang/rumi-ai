@@ -1,4 +1,3 @@
-import asyncio
 import json
 import logging
 import re
@@ -8,6 +7,7 @@ from langchain.tools import tool, ToolRuntime
 
 from src.agent.state import MainAgentState
 from src.limits import MAX_NARRATIONS_PER_PPT_TASK
+from src.log_context import create_context_task
 from src.managers.tts_manager import TTSManager
 from src.storage.database import Database
 from src.storage.seeds import _BUILTIN_VOICES
@@ -215,7 +215,7 @@ def create_save_narration_tool(db: Database, file_store: FileStore, tts_service:
         # Trigger async TTS pipeline
         if tts_service.is_configured:
             await db.update_task(task["id"], status="tts_generating")
-            asyncio.create_task(
+            create_context_task(
                 _tts_pipeline(
                     db=db,
                     file_store=file_store,

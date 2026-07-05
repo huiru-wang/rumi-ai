@@ -81,6 +81,106 @@ https://fonts.loli.net/css2?family=Playfair+Display:ital,wght@0,400;0,500;0,600;
 
 ## 4. Layout Grammar — 布局语法
 
+### Normalized Page Layouts — page_layouts
+
+以下 `page_layouts` 是本风格的页面类型与布局变体能力图。PPT 规划时先按固定页面类型识别：`cover -> agenda -> section -> content -> closing`，再从对应 `variants` 中选择布局。未启用的页面类型不要强行生成。
+
+```yaml
+page_layouts:
+  cover:
+    enabled: true
+    display_name: 封面页
+    variants:
+      - id: cover.editorial_hero
+        name: 杂志封面英雄页
+        best_for: 开场定位、主题宣告、品牌发布、深度专题标题
+        structure: 杂志页眉 + 居中引导小字 + 超大衬线标题 + 副标题/引导段 + 元数据行 + 页脚
+        capacity: 1 个主标题、1 个副标题、1 段 1-2 行引导、1 行元数据
+  agenda:
+    enabled: false
+    display_name: 目录页
+    variants: []
+    fallback: 本风格没有原生目录页；如必须展示目录，使用 content.editorial_index_cards，并在大纲中标记为 content。
+  section:
+    enabled: true
+    display_name: 章节页
+    variants:
+      - id: section.chapter_divider
+        name: 章节转场页
+        best_for: 章节切换、观点转折、叙事分幕
+        structure: 杂志页眉 + 中央 Act 标签 + 大号章节标题 + 一行引语
+        capacity: 1 个章节标题、1 行引语、少量元数据
+  content:
+    enabled: true
+    display_name: 内容页
+    variants:
+      - id: content.data_cards
+        name: 数据大字报型
+        best_for: KPI、关键数字、指标对比、结论摘要
+        structure: 引导小字 + 中号标题 + 引导段 + 2x2 或 3x2 数据卡片
+        capacity: 4-6 张数据卡片，每张 1 个数字 + 1 行注释
+      - id: content.split_text_visual
+        name: 左文右图型
+        best_for: 概念解释、案例截图、图文证据、产品或技术机制说明
+        structure: 7:5 两栏，左侧标题/引导/引用，右侧 16:10 或 4:3 主图
+        capacity: 1 个主观点、1 段说明、1 个引用框、1 张主图
+      - id: content.image_grid
+        name: 图片网格型
+        best_for: 多图展示、案例集合、界面/现场/素材盘点
+        structure: 标题区 + 3x2 或 3x1 图片网格 + Mono 图片说明
+        capacity: 3-6 张图片，每张 1 行说明
+      - id: content.process_steps
+        name: 流程步骤型
+        best_for: 操作流程、方法步骤、执行路径、阶段拆解
+        structure: 标题区 + 一个或多个步骤组 + 横向步骤卡片
+        capacity: 单行不超过 5 个步骤，复杂流程拆页
+      - id: content.comparison_columns
+        name: 并列对比型
+        best_for: 新旧对比、错误/正确、方案权衡、前后变化
+        structure: 标题区 + 1:1 双栏，弱化左栏、强调右栏
+        capacity: 2 个对比对象，每栏 3-5 个要点
+      - id: content.text_image_mixed
+        name: 图文混排型
+        best_for: 深度解释、研究结论、长段观点、图文辅助说明
+        structure: 8:4 两栏，左侧正文主导，右侧竖版或方形辅助图
+        capacity: 1 个标题、1 段 lead、1 段正文、1 个引用框、1 张辅助图
+      - id: content.statement_quote
+        name: 金句陈述型
+        best_for: 核心判断、观点强调、章节内高潮、可引用结论
+        structure: 中央超大衬线引用 + 释义/原文 + 出处元数据
+        capacity: 1 条 2 行以内金句、1 行释义、1 行出处
+      - id: content.editorial_index_cards
+        name: 杂志索引卡片型
+        best_for: 当用户明确要求目录但本风格无原生 agenda 时的降级目录
+        structure: 标题区 + 2x2 或 3x2 编号索引卡片
+        capacity: 4-6 个章节或主题入口
+  closing:
+    enabled: true
+    display_name: 封底页
+    variants:
+      - id: closing.hero_end
+        name: 杂志封底结语页
+        best_for: 结束语、行动号召、总结性声明、品牌收束
+        structure: 杂志页眉 + 中央引导小字 + 大号结语标题 + 点破文字 + 页脚结束标记
+        capacity: 1 个结语标题、1 行点破文字、少量元数据
+section_policy:
+  use_when:
+    - deck has 2+ clear content groups
+    - each section introduces at least 2 following content slides
+  avoid_when:
+    - compact deck has one continuous topic
+    - the section title only covers one isolated subtopic
+  consistency:
+    - if section is used for one peer topic, use it for all peer topics
+    - do not create a section page for one peer topic while another peer topic has no section page
+```
+
+**选择规则**：
+- 封面只能使用 `cover.editorial_hero`，封底只能使用 `closing.hero_end`。
+- 章节页优先使用 `section.chapter_divider`；如果内容只是普通小节标题且不需要转场，改用合适的 `content.*`。
+- 目录页默认不生成；只有用户明确要求目录时，才使用 `content.editorial_index_cards` 作为降级目录，并将 `page_type` 记录为 `content`。
+- 普通内容页必须从 `content.*` 中选择，禁止使用未在上表出现的布局名。
+
 ### Cover / 封面页
 
 出现频次：1 页

@@ -21,6 +21,7 @@ class PromptManager:
         self._style_prompt_template: str | None = None
         self._cover_html_prompt_template: str | None = None
         self._system_prompt: str | None = None
+        self._page_layout_contract: str | None = None
 
     # ------------------------------------------------------------------
     # Lazy loaders for prompt templates
@@ -67,6 +68,16 @@ class PromptManager:
                 self._cover_html_prompt_template = "# ERROR: generate_cover_html_prompt.md not found"
         return self._cover_html_prompt_template
 
+    def _get_page_layout_contract(self) -> str:
+        if self._page_layout_contract is None:
+            path = Path(__file__).resolve().parent.parent.parent / "skills" / "ppt" / "references" / "page-layout-contract.md"
+            try:
+                self._page_layout_contract = path.read_text(encoding="utf-8").strip()
+            except FileNotFoundError:
+                logger.warning("[PromptManager] page-layout-contract.md not found at %s", path)
+                self._page_layout_contract = "# ERROR: page-layout-contract.md not found"
+        return self._page_layout_contract
+
     # ------------------------------------------------------------------
     # Public API
     # ------------------------------------------------------------------
@@ -82,8 +93,12 @@ class PromptManager:
             markdown_text: PPTX 解析后的精准 Markdown 结构报告
         """
         template = self._get_style_prompt_template()
+        page_layout_contract = self._get_page_layout_contract()
         return (
             f"{template}\n\n"
+            f"---\n\n"
+            f"## 共享页面布局契约\n\n"
+            f"{page_layout_contract}\n\n"
             f"---\n\n"
             f"## PPTX 结构化解析报告\n\n"
             f"{markdown_text}\n"

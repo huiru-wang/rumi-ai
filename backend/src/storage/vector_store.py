@@ -34,7 +34,6 @@ class DashscopeEmbeddingFunction(EmbeddingFunction):
             raise RuntimeError(
                 f"Dashscope embedding failed: {response.status_code} {getattr(response, 'message', '')}"
             )
-        logger.info("[Embedding] success, got %d embeddings", len(response.output["embeddings"]))
         return [item["embedding"] for item in response.output["embeddings"]]
 
 

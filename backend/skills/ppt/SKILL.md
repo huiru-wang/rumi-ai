@@ -1,5 +1,5 @@
 ---
-name: html-ppt
+name: ppt
 description: Create stunning, animation-rich HTML presentations from scratch or by converting PowerPoint files. Use when the user wants to build a presentation, convert a PPT/PPTX to web, or create slides for a talk/pitch. Helps non-designers discover their aesthetic through visual exploration rather than abstract choices.
 ---
 
@@ -134,26 +134,6 @@ All form `label` and `options` **must match the user's language**. When the user
 - If the user selects specific documents, use only those as the generation scope.
 - If the user selects all documents, use every available knowledge-base document.
 
-**Question 5 — Content Density（内容密度）** (header: "Density")
-- Type: `select`
-- Options:
-  - `轻量：少文字、多留白、适合演讲展示`
-  - `标准：图文平衡、适合汇报讲解`
-  - `高密度：信息完整、适合培训/复盘/资料留存`
-- If the user explicitly asks for a concise, visual, spacious, or keynote-style deck, set `recommended` to `轻量：少文字、多留白、适合演讲展示`.
-- If the user explicitly asks for a detailed training deck, manual, review document, or leave-behind material, set `recommended` to `高密度：信息完整、适合培训/复盘/资料留存`.
-- Otherwise set `recommended` to `标准：图文平衡、适合汇报讲解`.
-
-Content density affects planning and layout:
-
-| Density | Per-slide content | Layout implication |
-|---------|-------------------|--------------------|
-| 轻量 | 1 main idea + 2-3 short points | Larger visuals, more whitespace, fewer cards |
-| 标准 | 1 main idea + 3-5 points | Balanced text, diagrams, images, and charts |
-| 高密度 | 1 topic + 4-6 points, steps, or examples | Prefer split slides, tables, flows, and structured modules |
-
-Density never overrides viewport fitting. If content does not fit cleanly, split slides instead of shrinking or scrolling.
-
 **When no documents are available and the user has not provided a topic**, the Topic question's custom input is required. Do not proceed with generation until the user provides a concrete topic, outline, or source content.
 
 ### Form Cancellation
@@ -167,18 +147,18 @@ Only disable inline editing when the user explicitly asks for a presentation-onl
 
 ---
 
-## Phase 1.5: Full Content & Asset Gathering
+## Phase 2: Content, Asset, and Style Preparation
 
 Before you generate the outline, collect the full content and visual materials needed for the whole presentation.
 
-The goal is to collect enough material for the whole presentation, not to perform a later per-slide verification pass. Use the selected topic, purpose, length, content density, and source documents to decide what to retrieve and how deeply to retrieve it.
+The goal is to collect enough material for the whole presentation, not to perform a later per-slide verification pass. Use the selected topic, purpose, length, and source documents to decide what to retrieve and how deeply to retrieve it.
 
 When source documents are selected:
 
 - Use `rag_search` to gather the content needed to support the full deck before writing the outline.
 - If the user selected specific documents, use the corresponding `doc_id` when searching those documents.
-- Do not prescribe a fixed number of `rag_search` calls. Retrieval depth depends on document count, topic complexity, expected length, and content density.
-- Higher density requires more complete facts, examples, steps, tables, and edge cases; lighter density requires stronger synthesis and fewer points.
+- Do not prescribe a fixed number of `rag_search` calls. Retrieval depth depends on document count, topic complexity, expected length, and evidence gaps.
+- Longer decks and complex topics require more complete facts, examples, steps, tables, and edge cases; concise decks require stronger synthesis and fewer points.
 - Prefer document-grounded content over general model knowledge. Do not invent professional facts, data, laws, or case examples that are not in the selected sources or directly provided by the user.
 
 Collect material across these categories:
@@ -212,15 +192,32 @@ Image and chart rules:
 - If a table or numeric text can be understood faster as a chart, plan an inline SVG chart using the chart rules.
 - Never copy citation markers, source headers, or `来源索引` text into the final HTML.
 
+### Style Layout Map
+
+Before drafting the outline, call `get_style_template` and read the complete style specification. This is mandatory because the style template defines which page types and layout variants are available.
+
+Read [page-layout-contract.md](references/page-layout-contract.md) before interpreting the style template. Extract the selected style's `page_layouts` and `section_policy` into a deduplicated layout map.
+
+Read [outline-planning-contract.md](references/outline-planning-contract.md) before drafting the outline. First identify content groups, then decide whether `section` pages are needed.
+
+Default structural order is `cover -> agenda -> section -> content -> closing`, but optional page types may be skipped when the selected style or content structure does not support them.
+
+Important split:
+
+- User-visible Markdown outline uses Chinese page type labels and Chinese layout names.
+- Internal design briefs and saved JSON keep machine-readable `page_type`, `layout_variant`, and `content_intent`.
+- `page_type` is the stable structural role. `layout_variant` is selected from the current style template. `content_intent` is the business meaning of the slide.
+- Do not use generic layouts that are not supported by the style template.
+
 ---
 
-## Phase 2: Outline Confirmation
+## Phase 3: Outline Confirmation
 
 Before generating the final HTML presentation, create a text-only Markdown outline and ask the user to confirm it.
 
 **Hard gate:** Do not generate the full HTML presentation and do not call `save_ppt` until the user explicitly confirms the outline.
 
-The outline must be based on the material gathered in Phase 1.5. Do not draft the outline only from document summaries when ready source documents exist.
+The outline must be based on the Phase 2 material inventory and style layout map. Do not draft the outline only from document summaries when ready source documents exist. Do not draft the outline before reading the selected style template.
 
 Use the selected source documents as the generation scope:
 
@@ -229,7 +226,9 @@ Use the selected source documents as the generation scope:
 - If no documents are selected, rely on the user's provided topic, outline, or source content
 - Do not imply that unselected documents were used
 
-### Step 2.1: Draft Outline
+### Step 3.1: Draft Outline
+
+Before writing the slide table, internally group the content using the rules in [outline-planning-contract.md](references/outline-planning-contract.md). Use section pages only when they introduce coherent following content groups.
 
 Output the outline as Markdown in this structure:
 
@@ -244,18 +243,16 @@ Output the outline as Markdown in this structure:
 
 预计页数：...
 
-内容密度：...
-
 视觉风格：...
 
 内容来源：...
 
 ### 幻灯片结构
 
-| # | 标题 | 核心内容 | 关键词 | 内容密度 | 可用素材 | 视觉建议 | 依据/来源 |
-|---|------|----------|--------|----------|----------|----------|-----------|
-| 1 | ... | ... | 关键词1,关键词2,关键词3 | 轻量/标准/高密度 | 图片/图表/表格/案例/无 | ... | ... |
-| 2 | ... | ... | 关键词1,关键词2,关键词3 | 轻量/标准/高密度 | 图片/图表/表格/案例/无 | ... | ... |
+| # | 页面类型 | 布局 | 标题 | 内容意图 | 核心内容 | 关键词 | 可用素材 | 视觉建议 | 依据/来源 |
+|---|----------|------|------|----------|----------|--------|----------|----------|-----------|
+| 1 | 封面页 | 杂志封面英雄页 | ... | 开场定位 | ... | 关键词1,关键词2,关键词3 | 图片/图表/表格/案例/无 | ... | ... |
+| 2 | 内容页 | 左文右图型 | ... | 解释机制 | ... | 关键词1,关键词2,关键词3 | 图片/图表/表格/案例/无 | ... | ... |
 
 ### 内容取舍说明
 
@@ -272,7 +269,7 @@ Output the outline as Markdown in this structure:
 
 #### Keywords 生成规则（重要）
 
-`keywords` are preserved in the structured outline for later narration generation, follow-up retrieval, and user-facing traceability. Generate them from the material gathered in Phase 1.5 and follow these rules:
+`keywords` are preserved in the structured outline for later narration generation, follow-up retrieval, and user-facing traceability. Generate them from the material gathered in Phase 2 and follow these rules:
 
 **✅ 必须包含：**
 - 该幻灯片涉及的**具体技术术语、专有名词、API/类名**（如 `ThreadPoolExecutor`、`volatile`、`CountDownLatch`）
@@ -291,9 +288,9 @@ Output the outline as Markdown in this structure:
 | 封面/标题 | 阿里巴巴, Java, 并发, 规范 | 并发处理, 编程规约, 线程安全规范 |
 | 核心要点回顾 | 总结, 回顾, 最佳实践 | ThreadPoolExecutor, 锁粒度, volatile, ConcurrentHashMap |
 
-Keep the outline concise but concrete enough for the user to judge scope, order, emphasis, density, and visual material usage.
+Keep the outline concise but concrete enough for the user to judge scope, order, emphasis, page type selection, layout choice, and visual material usage.
 
-### Step 2.15: Automatic Chart Decision
+### Step 3.2: Automatic Chart Decision
 
 When drafting the outline, inspect the source content for each slide and decide whether a chart would clarify the data relationship better than text. Do NOT ask the user whether they want charts; this is an agent design decision.
 
@@ -324,11 +321,11 @@ When drafting the outline, inspect the source content for each slide and decide 
 
 Never write vague suggestions like "配图" or "可视化".
 
-### Step 2.2: Multi-turn Revision Loop
+### Step 3.3: Multi-turn Revision Loop
 
 After presenting the outline, wait for the user's reply.
 
-- If the user explicitly confirms, proceed to Phase 3.
+- If the user explicitly confirms, proceed to Phase 4.
 - If the user asks for changes, revise the outline and ask for confirmation again.
 - If the user reply is ambiguous, ask one short confirmation question before proceeding.
 - If the requested change conflicts with selected documents or available evidence, explain the tradeoff and propose a revised outline for confirmation.
@@ -344,31 +341,28 @@ During this loop:
 
 ---
 
-## Phase 2.5: Slide Design Briefs
+## Phase 4: Build Final Presentation
 
 After the user explicitly confirms the outline, create internal slide design briefs before writing HTML.
 
-These briefs translate the confirmed outline and Phase 1.5 material inventory into page-level layout decisions. Do not add another user confirmation gate unless the briefs change the major structure, page count, or section order that the user already approved.
+These briefs translate the confirmed outline, Phase 2 material inventory, and Phase 2 style layout map into page-level layout decisions. Do not add another user confirmation gate unless the briefs change the major structure, page count, or section order that the user already approved.
 
 Use this structure:
 
-| # | Slide Goal | Material Used | Layout | Image/Chart Handling | Density Handling |
-|---|------------|---------------|--------|----------------------|------------------|
-| 1 | What the audience should remember | Facts/assets from gathered inventory | Cover / split / flow / comparison / chart / case | Use document image / recreate chart / image slot / none | How selected density is applied |
+| # | page_type | layout_variant | content_intent | Slide Goal | Material Used | Image/Chart Handling |
+|---|-----------|----------------|----------------|------------|---------------|----------------------|
+| 1 | `<internal enum>` | `<style variant id>` | 开场定位 | What the audience should remember | Facts/assets from gathered inventory | Use document image / recreate chart / image slot / none |
 
 Brief rules:
 
 - Each slide must have one clear communication goal.
 - Map gathered facts, cases, tables, images, or charts to the slide where they are most useful.
-- Choose layouts from the content shape: process, comparison, timeline, chart, case, table, diagram, or sparse keynote slide.
+- Choose `layout_variant` only from the selected style template's supported layouts for the slide's `page_type`.
+- Use `content_intent` to explain why this layout fits the slide content, such as process, comparison, timeline, chart, case, table, diagram, statement, or sparse keynote slide.
 - Make image/chart decisions before HTML generation.
-- Use density to decide whether to simplify, split, or structure content; never use density as a reason to cram content.
+- If content does not fit the chosen layout cleanly, split the slide or select a more suitable supported layout. Never cram, shrink into unreadability, or scroll.
 
 Do not perform a per-slide RAG verification pass after briefs are written. If you discover that the confirmed outline lacks enough gathered material for a slide, adapt the slide using the existing gathered material or explain the gap before generation if it changes the user's approved scope.
-
----
-
-## Phase 3: Build Final Presentation
 
 Generate the final presentation using the last outline explicitly confirmed by the user.
 
@@ -377,16 +371,15 @@ The final presentation must follow the confirmed outline and the slide design br
 Use only:
 
 - The user's explicit instructions and provided source content
-- The material gathered during Phase 1.5
+- The material gathered during Phase 2
 - The confirmed outline
 - The slide design briefs
 - The current style template
 
 Do not perform a per-slide RAG verification pass in this phase. Do not add a separate second-pass quality-check phase. Generate directly from the gathered material, confirmed outline, and briefs.
 
-**Before generating, read these supporting files and call the style template tool:**
+**Before generating, read these supporting files:**
 
-- **Call `get_style_template` tool** to fetch the complete style specification (style description + resource manifest with background image URLs). This is **MANDATORY** — you must use the returned style template as the authoritative design reference and strictly follow its color scheme, typography, layout rules, and background image usage.
 - [html-template.md](references/html-template.md) — HTML architecture and JS features
 - [style-guide.md](references/style-guide.md) — CSS rules, anti-patterns, font reference
 - [viewport-base.css](assets/viewport-base.css) — Mandatory CSS (include in full)
@@ -407,9 +400,9 @@ Do not perform a per-slide RAG verification pass in this phase. Do not add a sep
 
 ---
 
-## Phase 4: Delivery
+## Phase 5: Delivery
 
-### Step 4.1: Save Output
+### Step 5.1: Save Output
 
 **You MUST call `save_ppt` to deliver the presentation, but only after the user has explicitly confirmed the outline and the final HTML is complete.** This is the only way the user can access the result in their output panel.
 
@@ -443,30 +436,37 @@ The `outline` parameter must be a JSON string matching this schema:
   "summary": "PPT的全局摘要（2-3句话概括整个PPT的核心内容和目标）",
   "audience": "目标受众",
   "purpose": "用途",
-  "density": "standard",
   "total_slides": 12,
   "style": "swiss-modern",
   "material_inventory_summary": "本次PPT使用的主要事实、数据、图片、图表、表格或案例素材摘要",
   "slides": [
     {
       "number": 1,
+      "page_type": "cover",
+      "page_type_label": "封面页",
+      "layout_variant": "cover.editorial_hero",
+      "layout_name": "杂志封面英雄页",
+      "content_intent": "开场定位",
       "title": "幻灯片标题",
       "key_points": ["要点1", "要点2"],
       "keywords": ["关键词1", "关键词2", "关键词3"],
-      "density": "standard",
       "source_refs": ["doc_id:xxx"],
       "asset_refs": [
         {
           "type": "image",
           "source": "文档名 p.12",
+          "url": "http://localhost:8000/api/documents/.../asset/image.png",
           "usage": "作为案例截图"
         }
       ],
       "design_brief": {
         "goal": "本页要让观众记住的核心信息",
-        "layout": "分栏/流程/对比/图表/案例/封面等",
-        "image_or_chart": "document-image / svg-chart / image-slot / none",
-        "density_handling": "轻量/标准/高密度在本页的处理方式"
+        "page_type": "cover",
+        "page_type_label": "封面页",
+        "layout_variant": "cover.editorial_hero",
+        "layout_name": "杂志封面英雄页",
+        "layout_intent": "为什么该布局适合本页内容",
+        "image_or_chart": "document-image / svg-chart / image-slot / none"
       },
       "notes": "补充说明（可选）"
     }
@@ -488,16 +488,16 @@ This outline is used later for narration generation and RAG retrieval.
 
 The HTML must be fully self-contained (all CSS/JS inline). Do NOT use terminal commands or scripts to save — `save_ppt` is the only delivery mechanism.
 
-### Step 4.2: Confirm to User
+### Step 5.2: Confirm to User
 
 Summarize in a structured way:
 
 - PPT title
 - Style name
 - Slide count
-- Content density
 - Content sources used
 - Main structure or sections
+- Page types and notable layout variants used
 - Materials used: document images, recreated charts, tables, cases, or image placeholders
 - Inline editing: Hover top-left corner or press E to enter edit mode, click any text to edit, click image slots to upload/replace images, Ctrl+S to save
 
@@ -507,10 +507,12 @@ Summarize in a structured way:
 
 | File                                               | Purpose                                                              | When to Read              |
 | -------------------------------------------------- | -------------------------------------------------------------------- | ------------------------- |
-| [style-guide.md](references/style-guide.md)                   | CSS rules, anti-patterns, font pairing reference                     | Phase 3      |
-| [viewport-base.css](assets/viewport-base.css)             | Mandatory responsive CSS — copy into every presentation              | Phase 3      |
-| [html-template.md](references/html-template.md)               | HTML structure, JS features, code quality standards                  | Phase 3      |
-| [animation-patterns.md](references/animation-patterns.md)     | CSS/JS animation snippets and effect-to-feeling guide                | Phase 3      |
-| [chart-guide.md](references/chart-guide.md)                 | Chart selection, design rules, anti-patterns                         | Phase 3 (when outline has charts) |
-| [chart-patterns.css](assets/chart-patterns.css)           | Reusable SVG chart CSS classes and keyframes                         | Phase 3 (when outline has charts) |
-| [chart-templates.md](references/chart-templates.md)         | Copy-ready SVG chart skeletons                                       | Phase 3 (when outline has charts) |
+| [style-guide.md](references/style-guide.md)                   | CSS rules, anti-patterns, font pairing reference                     | Phase 4      |
+| [page-layout-contract.md](references/page-layout-contract.md)  | Shared page type, layout variant, and section policy contract        | Phase 2-5    |
+| [outline-planning-contract.md](references/outline-planning-contract.md) | Content grouping, section-page use, and user-visible outline rules | Phase 3      |
+| [viewport-base.css](assets/viewport-base.css)             | Mandatory responsive CSS — copy into every presentation              | Phase 4      |
+| [html-template.md](references/html-template.md)               | HTML structure, JS features, code quality standards                  | Phase 4      |
+| [animation-patterns.md](references/animation-patterns.md)     | CSS/JS animation snippets and effect-to-feeling guide                | Phase 4      |
+| [chart-guide.md](references/chart-guide.md)                 | Chart selection, design rules, anti-patterns                         | Phase 4 (when outline has charts) |
+| [chart-patterns.css](assets/chart-patterns.css)           | Reusable SVG chart CSS classes and keyframes                         | Phase 4 (when outline has charts) |
+| [chart-templates.md](references/chart-templates.md)         | Copy-ready SVG chart skeletons                                       | Phase 4 (when outline has charts) |

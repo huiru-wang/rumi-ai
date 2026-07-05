@@ -1,13 +1,14 @@
 "use client";
 
 import { useEffect, useRef, useState, useCallback } from "react";
-import { X, Check, ArrowLeft, Trash2, Loader2 } from "lucide-react";
-import { deletePptStyle, getPptStylePreviewUrl, type PptStyleInfo } from "@/lib/api";
+import { X, Check, ArrowLeft, Trash2, Loader2, ChevronLeft, ChevronRight } from "lucide-react";
+import { deletePptStyle, fetchFileContent, getPptStylePreviewUrl, type PptStyleInfo } from "@/lib/api";
 import {
   getPptStyleCategoryGroups,
   normalizePptStyleCategory,
   type PptStyleCategoryId,
 } from "./style-categories";
+import { prepareStylePreviewHtml } from "./style-preview-html";
 
 interface StylePickerDialogProps {
   selectedId: string;
@@ -25,11 +26,34 @@ export function StylePickerDialog({
   onDelete,
 }: StylePickerDialogProps) {
   const dialogRef = useRef<HTMLDivElement>(null);
+  const previewIframeRef = useRef<HTMLIFrameElement>(null);
   const [previewStyle, setPreviewStyle] = useState<PptStyleInfo | null>(null);
   const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewHtml, setPreviewHtml] = useState("");
+  const [previewError, setPreviewError] = useState("");
+  const [previewSlideIndex, setPreviewSlideIndex] = useState(0);
+  const [previewSlideTotal, setPreviewSlideTotal] = useState(1);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
   const [activeCategory, setActiveCategory] = useState<PptStyleCategoryId | null>(null);
+
+  const closePreview = useCallback(() => {
+    setPreviewStyle(null);
+    setPreviewLoading(false);
+    setPreviewHtml("");
+    setPreviewError("");
+    setPreviewSlideIndex(0);
+    setPreviewSlideTotal(1);
+  }, []);
+
+  const navigatePreview = useCallback((index: number) => {
+    const next = Math.max(0, Math.min(index, previewSlideTotal - 1));
+    setPreviewSlideIndex(next);
+    previewIframeRef.current?.contentWindow?.postMessage(
+      { type: "style-preview:navigate", index: next },
+      "*"
+    );
+  }, [previewSlideTotal]);
 
   // Close on Escape only — priority: delete confirm → preview → dialog
   useEffect(() => {
@@ -38,16 +62,61 @@ export function StylePickerDialog({
         if (confirmDeleteId) {
           setConfirmDeleteId(null);
         } else if (previewStyle) {
-          setPreviewStyle(null);
-          setPreviewLoading(false);
+          closePreview();
         } else {
           onClose();
+        }
+      } else if (previewStyle && !confirmDeleteId) {
+        if (e.key === "ArrowLeft" || e.key === "PageUp") {
+          e.preventDefault();
+          navigatePreview(previewSlideIndex - 1);
+        } else if (e.key === "ArrowRight" || e.key === "PageDown" || e.key === " ") {
+          e.preventDefault();
+          navigatePreview(previewSlideIndex + 1);
         }
       }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose, previewStyle, confirmDeleteId]);
+  }, [onClose, previewStyle, confirmDeleteId, closePreview, navigatePreview, previewSlideIndex]);
+
+  useEffect(() => {
+    if (!previewStyle) return;
+
+    let cancelled = false;
+
+    fetchFileContent(getPptStylePreviewUrl(previewStyle.id))
+      .then((html) => {
+        if (cancelled) return;
+        setPreviewHtml(prepareStylePreviewHtml(html));
+      })
+      .catch((err) => {
+        if (cancelled) return;
+        console.error("[StylePicker] failed to load style preview:", err);
+        setPreviewError("预览加载失败");
+      })
+      .finally(() => {
+        if (!cancelled) setPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [previewStyle]);
+
+  useEffect(() => {
+    const handleMessage = (event: MessageEvent) => {
+      const data = event.data as { type?: string; index?: number; total?: number } | null;
+      if (!data || data.type !== "style-preview-state") return;
+      const total = Math.max(Number(data.total) || 1, 1);
+      const index = Math.max(0, Math.min(Number(data.index) || 0, total - 1));
+      setPreviewSlideTotal(total);
+      setPreviewSlideIndex(index);
+    };
+
+    window.addEventListener("message", handleMessage);
+    return () => window.removeEventListener("message", handleMessage);
+  }, []);
 
   const categoryGroups = getPptStyleCategoryGroups(styles);
   const selectedStyle = styles.find((style) => style.id === selectedId);
@@ -77,6 +146,10 @@ export function StylePickerDialog({
 
   const handlePreview = useCallback((style: PptStyleInfo) => {
     setPreviewLoading(true);
+    setPreviewHtml("");
+    setPreviewError("");
+    setPreviewSlideIndex(0);
+    setPreviewSlideTotal(1);
     setPreviewStyle(style);
   }, []);
 
@@ -91,7 +164,7 @@ export function StylePickerDialog({
           {previewStyle ? (
             <div className="flex items-center gap-3">
               <button
-                onClick={() => setPreviewStyle(null)}
+                onClick={closePreview}
                 className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
               >
                 <ArrowLeft size={14} />
@@ -113,7 +186,7 @@ export function StylePickerDialog({
             </h2>
           )}
           <button
-            onClick={previewStyle ? () => setPreviewStyle(null) : onClose}
+            onClick={previewStyle ? closePreview : onClose}
             className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
           >
             <X size={16} />
@@ -122,20 +195,49 @@ export function StylePickerDialog({
 
         {/* Content: picker grid or preview iframe */}
         {previewStyle ? (
-          <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-muted/30 p-6">
+          <div className="relative flex flex-1 flex-col items-center justify-center overflow-hidden bg-muted/30 p-6">
             {/* Loading overlay */}
             {previewLoading && (
               <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
                 <Loader2 size={28} className="animate-spin text-muted-foreground" />
               </div>
             )}
-            <div className="aspect-video w-full max-w-[min(100%,calc((85vh-96px)*16/9))] overflow-hidden rounded-lg border border-border bg-background shadow-lg">
-              <iframe
-                src={getPptStylePreviewUrl(previewStyle.id)}
-                title={`${previewStyle.name} 全屏预览`}
-                className={`h-full w-full border-0 transition-opacity duration-300 ${previewLoading ? "opacity-0" : "opacity-100"}`}
-                onLoad={() => setPreviewLoading(false)}
-              />
+            <div className="relative aspect-video w-full max-w-[min(100%,calc((85vh-150px)*16/9))] overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+              {previewError ? (
+                <div className="flex h-full items-center justify-center text-xs text-muted-foreground">
+                  {previewError}
+                </div>
+              ) : previewHtml ? (
+                <iframe
+                  ref={previewIframeRef}
+                  srcDoc={previewHtml}
+                  title={`${previewStyle.name} 全屏预览`}
+                  sandbox="allow-scripts allow-same-origin"
+                  className={`h-full w-full border-0 transition-opacity duration-300 ${previewLoading ? "opacity-0" : "opacity-100"}`}
+                  onLoad={() => navigatePreview(previewSlideIndex)}
+                />
+              ) : null}
+            </div>
+            <div className="mt-4 flex items-center gap-3 rounded-full border border-border bg-background/90 px-3 py-2 shadow-lg">
+              <button
+                onClick={() => navigatePreview(previewSlideIndex - 1)}
+                disabled={previewSlideIndex <= 0 || previewLoading || !!previewError}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                title="上一页"
+              >
+                <ChevronLeft size={16} />
+              </button>
+              <span className="min-w-16 text-center font-mono text-xs text-muted-foreground">
+                {previewSlideIndex + 1} / {previewSlideTotal}
+              </span>
+              <button
+                onClick={() => navigatePreview(previewSlideIndex + 1)}
+                disabled={previewSlideIndex >= previewSlideTotal - 1 || previewLoading || !!previewError}
+                className="flex h-8 w-8 items-center justify-center rounded-full text-muted-foreground transition-colors hover:bg-muted hover:text-foreground disabled:cursor-not-allowed disabled:opacity-35"
+                title="下一页"
+              >
+                <ChevronRight size={16} />
+              </button>
             </div>
           </div>
         ) : (

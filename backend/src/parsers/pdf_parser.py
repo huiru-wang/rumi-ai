@@ -48,7 +48,8 @@ class PdfParser:
             raw_sections = self._group_into_sections(blocks, body_size)
             sections = self._assign_hierarchy(raw_sections)
             logger.info(
-                "[PdfParser] extracted %d sections", len(sections),
+                "[PdfParser] extracted %d sections",
+                len(sections),
             )
             return sections
         finally:
@@ -67,7 +68,9 @@ class PdfParser:
         else:
             doc = fitz.open(source)
         try:
-            logger.info("[PdfParser] start parse_blocks: filename=%s pages=%d", filename, doc.page_count)
+            logger.info(
+                "[PdfParser] start parse_blocks: filename=%s pages=%d", filename, doc.page_count
+            )
             text_blocks = await self._extract_blocks_with_progress(doc, progress_callback)
             body_size = self._detect_body_font_size(text_blocks)
             logger.info("[PdfParser] body font detected: size=%s", body_size)
@@ -150,11 +153,6 @@ class PdfParser:
                             xref,
                             exc,
                         )
-                logger.info(
-                    "[PdfParser] page parsed: page=%d image_blocks=%d",
-                    page_num,
-                    page_image_count,
-                )
                 if progress_callback:
                     await progress_callback(page_num, doc.page_count)
                 if hasattr(page, "find_tables"):
@@ -299,9 +297,7 @@ class PdfParser:
             return 2
         return 3
 
-    def _group_into_sections(
-        self, blocks: list[dict], body_size: float
-    ) -> list[dict]:
+    def _group_into_sections(self, blocks: list[dict], body_size: float) -> list[dict]:
         """Group consecutive blocks under heading blocks."""
         sections: list[dict] = []
         current: dict | None = None

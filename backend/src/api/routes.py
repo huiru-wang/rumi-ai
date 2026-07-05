@@ -1,6 +1,7 @@
 import json
 import logging
 import re
+import time
 from mimetypes import guess_type
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
@@ -42,6 +43,14 @@ from src.limits import (
     MAX_STYLE_EXTRACTION_TASKS_PER_WORKSPACE,
     MAX_CUSTOM_STYLES_PER_USER,
 )
+from src.log_context import (
+    add_context_task,
+    configure_log_record_context,
+    new_request_id,
+    new_trace_id,
+    reset_log_context,
+    set_log_context,
+)
 from src.managers.doc_manager import DuplicateDocumentError
 from src.storage.seeds import _BUILTIN_VOICES
 from src.url_utils import (
@@ -55,9 +64,15 @@ logger = logging.getLogger(__name__)
 invite_registry = InviteRegistry.from_env()
 
 # Configure root logger for development
+configure_log_record_context()
 logging.basicConfig(
     level=logging.INFO,
-    format="%(asctime)s [%(name)s] %(levelname)s: %(message)s",
+    format=(
+        "%(asctime)s %(levelname)s "
+        "trace_id=%(trace_id)s request_id=%(request_id)s "
+        "user_id=%(user_id)s workspace_id=%(workspace_id)s "
+        "module=%(name)s msg=%(message)s"
+    ),
     datefmt="%H:%M:%S",
 )
 
@@ -67,7 +82,43 @@ app.add_middleware(
     allow_origins=["*"],
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Request-ID", "X-Trace-ID"],
 )
+
+
+_WORKSPACE_PATH_RE = re.compile(r"/api/workspaces/([^/?]+)")
+
+
+def _extract_workspace_id_from_path(path: str) -> str:
+    match = _WORKSPACE_PATH_RE.search(path)
+    return match.group(1) if match else "-"
+
+
+@app.middleware("http")
+async def log_context_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID") or new_request_id()
+    trace_id = request.headers.get("X-Trace-ID") or new_trace_id()
+    workspace_id = _extract_workspace_id_from_path(request.url.path)
+    user_id = request.query_params.get("user_id") or "-"
+    tokens = set_log_context(
+        trace_id=trace_id,
+        request_id=request_id,
+        user_id=user_id,
+        workspace_id=workspace_id,
+    )
+    started = time.perf_counter()
+    try:
+        response = await call_next(request)
+    except Exception:
+        duration_ms = int((time.perf_counter() - started) * 1000)
+        logger.exception("[API] request failed method=%s path=%s duration_ms=%d", request.method, request.url.path, duration_ms)
+        raise
+    finally:
+        reset_log_context(tokens)
+
+    response.headers["X-Request-ID"] = request_id
+    response.headers["X-Trace-ID"] = trace_id
+    return response
 
 
 @app.exception_handler(BizException)
@@ -110,6 +161,7 @@ async def _get_invited_workspace(workspace_id: str) -> dict:
     if not workspace:
         raise BizException(ERR_WORKSPACE_NOT_FOUND, "工作区不存在")
     _ensure_invited_user(workspace["user_id"])
+    set_log_context(user_id=workspace["user_id"], workspace_id=workspace_id)
     return workspace
 
 
@@ -367,7 +419,7 @@ async def upload_document(
         if exc.existing_doc_id and "内容完全相同" in str(exc):
             raise BizException(ERR_DOCUMENT_DUPLICATE_HASH, str(exc)) from exc
         raise BizException(ERR_DOCUMENT_DUPLICATE_NAME, str(exc)) from exc
-    background_tasks.add_task(doc_service.process_document, doc["id"])
+    add_context_task(background_tasks, doc_service.process_document, doc["id"])
     logger.info("[API] upload result: id=%s status=%s", doc["id"], doc["status"])
     return success_response(_sanitize_document(doc))
 
@@ -560,7 +612,8 @@ async def submit_style_extraction(
     )
     logger.info("[API] style extraction task created: id=%s", task["id"])
 
-    background_tasks.add_task(
+    add_context_task(
+        background_tasks,
         style_extract_manager.run_extraction,
         task["id"], workspace_id, content, file.filename,
     )
