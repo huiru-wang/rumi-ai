@@ -4,6 +4,7 @@ import test from "node:test";
 import {
   createMessageDebugSnapshot,
   getLiveMessagesAfterHistory,
+  selectLiveMessagesForDisplay,
   shouldPreserveDisplayedMessages,
   shouldUseLiveMessages,
 } from "./message-display.ts";
@@ -76,6 +77,32 @@ test("does not treat checkpoint history as live when no history anchor exists", 
       getMessageKey: (message) => `${message.type}:${message.id}`,
     }),
     [],
+  );
+});
+
+test("selects only the live suffix when persisted history is present", () => {
+  const historyMessages = [
+    { id: "h1", type: "human" },
+    { id: "a1", type: "ai" },
+  ];
+  const streamMessages = [
+    { id: "h1", type: "human" },
+    { id: "a1", type: "ai" },
+    { id: "h2", type: "human" },
+    { id: "a2", type: "ai" },
+  ];
+
+  assert.deepEqual(
+    selectLiveMessagesForDisplay({
+      canUseLiveMessages: true,
+      historyMessages,
+      streamMessages,
+      getMessageKey: (message) => `${message.type}:${message.id}`,
+    }),
+    [
+      { id: "h2", type: "human" },
+      { id: "a2", type: "ai" },
+    ],
   );
 });
 

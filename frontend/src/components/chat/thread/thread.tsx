@@ -1,8 +1,15 @@
 "use client";
 
-import { useRef, useCallback, useLayoutEffect, useEffect } from "react";
+import { useRef, useCallback, useLayoutEffect, useEffect, type TouchEvent, type WheelEvent } from "react";
 import { useStreamContext, useMessageContext } from "../assistant";
-import { isNearBottom, isStreamingContent, isHiddenMessage } from "./helpers";
+import {
+  getMessageScrollSignature,
+  isNearBottom,
+  isStreamingContent,
+  isHiddenMessage,
+  shouldDisableAutoScrollOnWheel,
+  shouldRestoreAutoScrollFromPosition,
+} from "./helpers";
 import { EmptyState, TypingIndicator } from "./message-actions";
 import { InterruptBlock } from "./interrupt-block";
 import { ChatInput } from "./chat-input";
@@ -32,9 +39,13 @@ export function Thread({
     isLoadingOlderMessages,
   } = useStreamContext();
   const shouldStickToBottom = useRef(true);
+  const userScrollOverride = useRef(false);
+  const autoScrollingUntil = useRef(0);
+  const touchStartY = useRef<number | null>(null);
   const historyPrependSnapshot = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
   const initialScrollDone = useRef(false);
   const hasMessages = visibleMessages.length > 0;
+  const messageScrollSignature = getMessageScrollSignature(visibleMessages);
 
   // Reset initial scroll flag when messages clear (e.g. workspace switch)
   useEffect(() => {
@@ -66,17 +77,36 @@ export function Thread({
     }
 
     // When an interrupt form appears, always scroll to show it.
-    if (hasInterrupt || shouldStickToBottom.current) {
-      el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
+    if (hasInterrupt || (shouldStickToBottom.current && !userScrollOverride.current)) {
+      autoScrollingUntil.current = Date.now() + 120;
+      el.scrollTo({
+        top: el.scrollHeight,
+        behavior: isLoading ? "auto" : "smooth",
+      });
     }
-  }, [visibleMessages.length, isLoading, hasInterrupt]);
+  }, [messageScrollSignature, isLoading, hasInterrupt, visibleMessages.length]);
 
   const handleScroll = useCallback(async () => {
     const el = scrollRef.current;
     if (!el) return;
 
-    shouldStickToBottom.current = isNearBottom(el);
-    if (el.scrollTop > 80 || !hasOlderMessages || isLoadingOlderMessages) {
+    if (Date.now() < autoScrollingUntil.current) {
+      return;
+    }
+
+    const nearBottom = isNearBottom(el);
+    if (
+      shouldRestoreAutoScrollFromPosition({
+        userOverride: userScrollOverride.current,
+        isNearBottom: nearBottom,
+      })
+    ) {
+      userScrollOverride.current = false;
+      shouldStickToBottom.current = true;
+    } else if (!userScrollOverride.current) {
+      shouldStickToBottom.current = nearBottom;
+    }
+    if (isLoading || el.scrollTop > 80 || !hasOlderMessages || isLoadingOlderMessages) {
       return;
     }
 
@@ -94,11 +124,53 @@ export function Thread({
         historyPrependSnapshot.current = null;
       }
     });
-  }, [hasOlderMessages, isLoadingOlderMessages, loadOlderMessages]);
+  }, [hasOlderMessages, isLoadingOlderMessages, isLoading, loadOlderMessages]);
+
+  const handleWheel = useCallback((event: WheelEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    if (!el) return;
+
+    if (
+      shouldDisableAutoScrollOnWheel({
+        deltaY: event.deltaY,
+        isNearBottom: isNearBottom(el),
+      })
+    ) {
+      autoScrollingUntil.current = 0;
+      userScrollOverride.current = true;
+      shouldStickToBottom.current = false;
+      return;
+    }
+  }, []);
+
+  const handleTouchStart = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    touchStartY.current = event.touches[0]?.clientY ?? null;
+  }, []);
+
+  const handleTouchMove = useCallback((event: TouchEvent<HTMLDivElement>) => {
+    const el = scrollRef.current;
+    const startY = touchStartY.current;
+    const currentY = event.touches[0]?.clientY;
+    if (!el || startY == null || currentY == null) return;
+
+    // Finger moving down scrolls the content upward to older messages.
+    if (currentY > startY || !isNearBottom(el)) {
+      autoScrollingUntil.current = 0;
+      userScrollOverride.current = true;
+      shouldStickToBottom.current = false;
+    }
+  }, []);
 
   return (
     <div className="flex h-full flex-col">
-      <div ref={scrollRef} onScroll={handleScroll} className="flex-1 overflow-y-auto">
+      <div
+        ref={scrollRef}
+        onScroll={handleScroll}
+        onWheel={handleWheel}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        className="flex-1 overflow-y-auto"
+      >
         <div className="mx-auto max-w-2xl px-4 py-6 space-y-4">
           {isLoadingOlderMessages && (
             <div className="py-2 text-center text-xs text-muted-foreground">

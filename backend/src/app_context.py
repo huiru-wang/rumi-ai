@@ -23,10 +23,13 @@ class AppContext:
         data_dir = os.getenv("DATA_DIR", "./data")
         db = Database(f"{data_dir}/rumi_ai.db")
         provider = cls._create_storage_provider(data_dir)
+        chroma_host = os.getenv("CHROMA_HOST", "localhost")
+        if chroma_host == "localhost":
+            chroma_host = "127.0.0.1"
         return cls(
             db=db,
             vector_store=VectorStore(
-                host=os.getenv("CHROMA_HOST", "localhost"),
+                host=chroma_host,
                 port=int(os.getenv("CHROMA_PORT", "8001")),
             ),
             file_store=FileStore(f"{data_dir}/files", provider=provider, db=db),

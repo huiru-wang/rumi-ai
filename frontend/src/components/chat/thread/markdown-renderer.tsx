@@ -5,14 +5,7 @@ import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
-import type { CitationEntry } from "./types";
-
-// ============================================================
-// Constants
-// ============================================================
-
-const REF_PATTERN = /\[ref:([^\]|]+)\|([^\]]+)\]/g;
-const CITE_HREF_PREFIX = "#__cite__";
+import { CITE_HREF_PREFIX, replaceCitationMarkers } from "./citations";
 
 // ============================================================
 // CitationBadge
@@ -70,14 +63,7 @@ function CitationBadge({
 // ============================================================
 
 export function MarkdownWithCitations({ text }: { text: string }) {
-  const citations: CitationEntry[] = [];
-  const sanitized = text.replace(
-    REF_PATTERN,
-    (_m, docName: string, detail: string) => {
-      citations.push({ docName, detail });
-      return `[⟦${citations.length}⟧](${CITE_HREF_PREFIX}${citations.length})`;
-    },
-  );
+  const { text: sanitized, citations } = replaceCitationMarkers(text);
 
   return (
     <ReactMarkdown

@@ -162,3 +162,24 @@ async def test_old_path_based_file_routes_are_not_public(tmp_path, monkeypatch):
             assert exc.status_code in {404, 410}
         else:
             raise AssertionError("path-based file route should not serve files")
+
+
+async def test_document_asset_preview_uses_doc_id_not_public_path(tmp_path, monkeypatch):
+    db, store, workspace_id = await _make_store(tmp_path)
+    monkeypatch.setattr(routes, "db", db)
+    monkeypatch.setattr(routes, "file_store", store)
+
+    source_path = await store.save_doc(workspace_id, "source.docx", b"source")
+    doc = await db.create_document(
+        workspace_id=workspace_id,
+        filename="source.docx",
+        file_type="docx",
+        storage_path=source_path,
+        content_hash="hash",
+    )
+    await store.save_doc(workspace_id, "source_assets/image_0001.png", b"image-bytes")
+
+    response = await routes.preview_document_asset(doc["id"], "image_0001.png")
+
+    assert response.headers["Content-Disposition"] == "inline"
+    assert response.body == b"image-bytes"

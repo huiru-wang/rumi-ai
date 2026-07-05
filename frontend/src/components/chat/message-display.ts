@@ -29,6 +29,15 @@ export function getLiveMessagesAfterHistory<T>(input: GetLiveMessagesInput<T>): 
   return streamMessages.slice(lastHistoryIndex + 1);
 }
 
+interface SelectLiveMessagesInput<T> extends GetLiveMessagesInput<T> {
+  canUseLiveMessages: boolean;
+}
+
+export function selectLiveMessagesForDisplay<T>(input: SelectLiveMessagesInput<T>): T[] {
+  if (!input.canUseLiveMessages) return [];
+  return getLiveMessagesAfterHistory(input);
+}
+
 interface PreserveDisplayedInput<T> {
   isLoading: boolean;
   historyMessages: T[];

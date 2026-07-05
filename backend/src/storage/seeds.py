@@ -24,7 +24,7 @@ _BUILTIN_PPT_STYLES = [
     {
         "id": "sys-magazine-ink",
         "user_id": "system",
-        "category": "dark",
+        "category": "creative",
         "name": "墨纸杂志",
         "name_en": "magazine-ink",
         "description": "纯墨黑与暖米白的高对比纸媒美学，衬线大字与等宽标签营造编辑感，适合深度内容与品牌发布。",
@@ -34,7 +34,7 @@ _BUILTIN_PPT_STYLES = [
     {
         "id": "sys-cream-pastel-infographic",
         "user_id": "system",
-        "category": "light",
+        "category": "data",
         "name": "奶油轻彩",
         "name_en": "cream-pastel-infographic",
         "description": "奶油纸底的轻彩信息图，糖果色卡片、深墨灰结构线与大号数据，适合知识分享和趋势解读。",
@@ -44,7 +44,7 @@ _BUILTIN_PPT_STYLES = [
     {
         "id": "sys-dark-soft-glow",
         "user_id": "system",
-        "category": "dark",
+        "category": "creative",
         "name": "暗色柔光",
         "name_en": "dark-soft-glow",
         "description": "深黑底搭配柔焦暖色光晕，衬线标题与极简几何线条，适合高端宣讲与品牌发布会。",
@@ -54,7 +54,7 @@ _BUILTIN_PPT_STYLES = [
     {
         "id": "sys-swiss-modern",
         "user_id": "system",
-        "category": "light",
+        "category": "business",
         "name": "瑞士国际",
         "name_en": "swiss-modern",
         "description": "以安全橙为单一强调色的瑞士国际主义风格，强调网格秩序、无衬线大字重对比与几何抽象装饰，适用于企业宣讲、安全宣贯类演示。",
@@ -64,7 +64,7 @@ _BUILTIN_PPT_STYLES = [
     {
         "id": "sys-peach-lavender-split",
         "user_id": "system",
-        "category": "light",
+        "category": "product",
         "name": "桃紫分境",
         "name_en": "peach-lavender-split",
         "description": "桃粉与薰衣草紫左右分屏，糖果色标签卡片，适合轻松宣讲与知识分享。",

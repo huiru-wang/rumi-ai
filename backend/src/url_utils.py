@@ -33,3 +33,11 @@ def build_style_extraction_resource_url(task_id: str, filename: str) -> str:
         f"{get_public_api_base()}/api/tasks/"
         f"{quote(task_id, safe='')}/style-resource/{quote(filename, safe='')}"
     )
+
+
+def build_document_asset_url(doc_id: str, filename: str) -> str:
+    """Build a public preview URL for a document-derived asset."""
+    return (
+        f"{get_public_api_base()}/api/documents/"
+        f"{quote(doc_id, safe='')}/asset/{quote(filename, safe='')}"
+    )

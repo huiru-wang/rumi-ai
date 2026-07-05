@@ -18,15 +18,17 @@ RumiAI 是一个 **文档驱动的 AI 工作台**，帮助用户基于上传的�
 
 - `docs/backend-architecture.md` — 后端四层架构、数据流、模块职责
 - `docs/frontend-architecture.md` — 前端组件架构、通信模型、交互流程
+- `docs/document-parsing-architecture.md` — 文档解析、图片理解、结构化分块、向量入库
+- `docs/style-extraction-architecture.md` — PPTX 风格提取、资源迁移、自定义风格保存
 
 ### 核心技术栈
 
 | 层 | 技术 | 注意事项 |
 |----|------|---------|
 | **后端** | Python ≥ 3.12, FastAPI, LangChain ≥ 1.2, LangGraph ≥ 1.1 | 使用 `langchain.agents.create_agent` 而非已废弃的 `initialize_agent` |
-| **LLM** | DeepSeek (deepseek-v4-flash) | Agent 推理 + 文档摘要 + 风格提取，通过 OpenAI 兼容接口调用 |
+| **LLM** | DeepSeek (deepseek-v4-flash) + OpenAI 兼容模型 | Agent 推理、文档摘要、风格提取，通过 OpenAI 兼容接口调用 |
 | **TTS** | Dashscope qwen3-tts-flash | 口播稿音频生成，非流式调用 |
-| **存储** | SQLite (aiosqlite), ChromaDB ≥ 1.0 (HTTP Server), Dashscope Embedding | 所有数据按 workspace_id 隔离 |
+| **存储** | SQLite (aiosqlite), ChromaDB ≥ 1.0 (HTTP Server), Dashscope Embedding, FileStore Local/OSS | 元数据按 workspace/user 隔离，文件路径不直接暴露给前端 |
 | **前端** | Next.js 16 (App Router), React 19, Tailwind CSS 4, @langchain/react | 所有组件均为 Client Components (`"use client"`) |
 | **包管理** | 后端: uv / 前端: pnpm | — |
 
@@ -37,7 +39,7 @@ RumiAI 是一个 **文档驱动的 AI 工作台**，帮助用户基于上传的�
 - **FastAPI (:8000)** — REST API，管理工作区/文档/任务/消息/PPT风格 CRUD。依赖从 `src/api/deps.py` 初始化
 - **LangGraph (:2024)** — Agent 运行时，流式对话+工具调用。依赖从 `src/agent/graph.py._make_default_graph()` 独立初始化
 
-两个进程共享存储（SQLite + ChromaDB HTTP Server + FileStore），但各自有独立的实例。
+两个进程共享存储（SQLite + ChromaDB HTTP Server + FileStore），但各自有独立的实例。PPTX 风格提取当前由 FastAPI 后台任务执行，不属于 LangGraph 主 Agent graph。
 
 ### AppContext 统一依赖入口
 
@@ -57,7 +59,7 @@ FastAPI 通过 `deps.py` 的 `AppContext.from_env()` 创建，LangGraph 通过 `
 ## Before Editing
 
 - Read `README.md` for setup and commands.
-- For architecture details, read `docs/backend-architecture.md` and `docs/frontend-architecture.md`.
+- For architecture details, read `docs/backend-architecture.md`, `docs/frontend-architecture.md`, `docs/document-parsing-architecture.md`, and `docs/style-extraction-architecture.md`.
 - Prefer existing project boundaries over new abstractions:
   - REST routes: `backend/src/api/routes.py`
   - Dependency injection: `backend/src/api/deps.py`
@@ -66,16 +68,17 @@ FastAPI 通过 `deps.py` 的 `AppContext.from_env()` 创建，LangGraph 通过 `
   - Agent state: `backend/src/agent/state.py` (workspace_id, ppt_style, voice_id, current_ppt_task_id)
   - Message history: `backend/src/agent/message_history.py`
   - Middlewares: `backend/src/middlewares/` (context_inject_middleware, summarization, model_message_sanitizer, logging)
-  - Managers: `backend/src/managers/` (doc_manager, tts_manager, prompt_manager, skill_manager, style_extract_manager)
+  - Managers: `backend/src/managers/` (doc_manager, vision_manager, tts_manager, prompt_manager, skill_manager, style_extract_manager)
   - Agent tools: `backend/src/tools/`
   - Skills: `backend/skills/<name>/SKILL.md`
   - Storage: `backend/src/storage/` (database.py / vector_store.py / file_store.py / providers.py)
   - Prompt templates: `backend/src/managers/prompts/` (system_prompt.md, style_extract_prompt.md, generate_cover_html_prompt.md)
-  - Parsers: `backend/src/parsers/` (base.py / pdf / docx / markdown)
-  - Frontend API client: `frontend/src/lib/api.ts` (includes `listVoices`, `getFileViewUrl`, `downloadTaskFile`)
-  - Chat system: `frontend/src/components/chat/` (assistant.tsx 管理连接, thread.tsx 渲染消息)
+  - Parsers: `backend/src/parsers/` (base.py / pdf / docx / markdown / pptx)
+  - Frontend API client: `frontend/src/lib/api.ts` (includes task/share/style URL builders; do not use path-based file URLs)
+  - Chat system: `frontend/src/components/chat/` (assistant.tsx 管理连接, `thread/` 渲染消息)
   - Config UI: `frontend/src/components/config/` (config-panel.tsx, style-picker-dialog.tsx, style-extraction-dialog.tsx, voice-picker-dialog.tsx)
   - PPT player/preview: `frontend/src/components/player/` (ppt-player-dialog.tsx, ppt-preview-dialog.tsx)
+  - Share page: `frontend/src/app/share/[token]/page.tsx`
   - Workspace UI panels: `frontend/src/components/`
 
 ## 常用命令
@@ -106,27 +109,29 @@ pnpm build && pnpm start                                    # 生产构建
 
 - Add or change FastAPI endpoints in `backend/src/api/routes.py`.
 - Add new dependencies to `backend/src/api/deps.py` (FastAPI process) or `backend/src/agent/graph.py` (LangGraph process).
-- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`.
+- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`, `share_link`.
   - `workspace` has `ext_data` JSON column for config (`ppt_style` stores style ID like `sys-swiss-modern`, `voice_info` stores `{id, name, trait, gender}`).
   - `document` has `content_hash` column for duplicate detection.
   - `task` has `parent_task_id` for parent-child hierarchy (e.g., narration tasks under PPT tasks). Task types: `ppt`, `narration`, `ppt_style_extraction`.
-  - `message` stores turn-based chat history for pagination and recovery.
+  - `message` stores turn-based and run-grouped chat history for pagination and recovery.
   - `ppt_style` stores system builtin + user custom PPT styles (id, category, name, name_en, description, style_description, resource_manifest, preview_path). System style IDs are prefixed with `sys-`.
+  - `share_link` stores active/revoked share tokens for completed PPT and narration tasks.
 - Keep vector behavior in `backend/src/storage/vector_store.py`. ChromaDB via **HTTP server** (`HttpClient`), both processes share the same server. Collections are per-workspace: `ws_{workspace_id}`. Config: `CHROMA_HOST`, `CHROMA_PORT` env vars.
 - Keep file operations in `backend/src/storage/file_store.py`. FileStore delegates to `StorageProvider` (LocalProvider or OSSProvider). New path structure: `user/{user_id}/workspace/{workspace_id}/docs|ppt|style/...`. Smart routing handles legacy absolute paths transparently.
 - Keep storage provider abstraction in `backend/src/storage/providers.py`. `StorageProvider` ABC with `LocalProvider` (filesystem) and `OSSProvider` (Alibaba Cloud OSS). Toggle via `OSS_ENABLE` env var.
-- Keep document processing in `backend/src/managers/doc_manager.py` (DocManager). Document status flow: `uploaded → parsing → parsed → chunking → indexing → summarizing → ready | error`.
+- Keep document processing in `backend/src/managers/doc_manager.py` (DocManager). Document status flow: `uploaded → parsing → parsed → chunking → indexing → summarizing → ready | error`. Structured parsing details are in `docs/document-parsing-architecture.md`.
+- Keep document image/chart understanding in `backend/src/managers/vision_manager.py` (VisionManager). Vision failures should not fail the whole document.
 - Keep TTS audio generation in `backend/src/managers/tts_manager.py` (TTSManager).
 - Keep style extraction workflow in `backend/src/managers/style_extract_manager.py` (StyleExtractManager). Status flow: `generating(parsing → analyzing_style → generating_preview) → completed | failed`.
 - Register agent tools in `backend/src/tools/__init__.py` via `create_tools(ctx)`. Current tools (8): `clarify_form`, `rag_search`, `load_skill`, `save_ppt`, `run_skill_script`, `get_ppt_detail`, `get_style_template`, `save_narration`.
 - New tools go in `backend/src/tools/`. Use `ToolRuntime[MainAgentState]` for workspace-aware tools.
 - Register middlewares in `backend/src/middlewares/__init__.py` via `create_middlewares(ctx, callback)`. Middleware classes: `ContextInjectMiddleware`, `MessageHistoryMiddleware`, `ModelMessageSanitizerMiddleware`, `SummarizationMiddleware`, `LoggingMiddleware`.
 - System prompt is loaded from `backend/src/managers/prompts/system_prompt.md` via `PromptManager`. Dynamic context (doc summaries, PPT metadata, style description) is injected via `ContextInjectMiddleware`.
-- Style extraction prompts are in `backend/src/managers/prompts/` (style_extract_prompt.md, generate_cover_html_prompt.md).
+- Style extraction prompts are in `backend/src/managers/prompts/` (style_extract_prompt.md, generate_cover_html_prompt.md). PPTX parsing lives in `backend/src/parsers/pptx_parser.py`.
 - Agent state (`state.py`) carries: `workspace_id`, `ppt_style`, `voice_id`, `current_ppt_task_id`.
 - PPT styles are stored in `ppt_style` table and served via `GET /api/ppt-styles`. System styles (5 builtin) are seeded at DB init with `sys-` prefixed IDs, custom styles come from style extraction. Each style can have a `resource_manifest` JSON field for visual assets.
 - TTS voices are served via `GET /api/voices` from builtin seed data (`_BUILTIN_VOICES`).
-- File download: `GET /api/tasks/{task_id}/download` (task output), `GET /api/files/{path}` (generic), `GET /api/file-view/{path}` (inline preview, supports `thumb=1`).
+- File access: use task/share/document/style scoped endpoints only, e.g. `GET /api/tasks/{task_id}/preview`, `GET /api/tasks/{task_id}/download`, `GET /api/tasks/{task_id}/audio/{slide_number}`, `GET /api/documents/{doc_id}/asset/{filename}`, `GET /api/shares/{token}/ppt`. Path-based `GET /api/files/{path}` and `GET /api/file-view/{path}` are disabled and return 410.
 - Add tests in `backend/tests/` for backend changes.
 
 ## Frontend Patterns
@@ -134,8 +139,8 @@ pnpm build && pnpm start                                    # 生产构建
 - Keep REST calls centralized in `frontend/src/lib/api.ts`. Add types alongside methods.
 - Chat connection is managed by `frontend/src/components/chat/assistant.tsx` via `@langchain/react` `useStream` hook. Do not bypass this for Agent communication.
 - `assistant.tsx` supports `ExternalCommand` mechanism: workspace page can inject slash commands (e.g., `/narrate`) via the `externalCommand` prop.
-- Message rendering logic is in `frontend/src/components/chat/thread.tsx`. Support for tool calls, thinking blocks, and ref markers is already implemented.
-- Keep workspace page composition in `frontend/src/app/workspace/[id]/page.tsx`. This page orchestrates ConfigPanel, TaskPanel, ChatPanel, DocumentPanel, PPTPreviewDialog, and PPTPlayerDialog.
+- Message rendering logic is in `frontend/src/components/chat/thread/`. Support for tool calls, thinking blocks, interrupts, and ref markers is already implemented.
+- Keep workspace page composition in `frontend/src/app/workspace/[id]/page.tsx`. This page orchestrates ConfigPanel, TaskPanel, ChatPanel, DocumentPanel, PPTPreviewDialog, PPTPlayerDialog, and StyleExtractionDialog.
 - Config UI lives in `frontend/src/components/config/`:
   - `config-panel.tsx` — PPT 风格 + 音色入口
   - `style-picker-dialog.tsx` — PPT 风格选择弹窗（从 API 加载系统 + 自定义风格，支持删除自定义风格）
@@ -144,6 +149,7 @@ pnpm build && pnpm start                                    # 生产构建
   - `voice-picker-dialog.tsx` — TTS 音色选择弹窗（含试听）
 - PPT preview/edit lives in `frontend/src/components/player/ppt-preview-dialog.tsx` (iframe srcDoc, edit mode via contentEditable).
 - PPT playback lives in `frontend/src/components/player/ppt-player-dialog.tsx` (slide-by-slide audio sync, fullscreen).
+- Public share playback lives in `frontend/src/app/share/[token]/page.tsx`. It consumes safe share URLs from `getShareDetail()` and never storage paths.
 - Keep document, chat, task, and layout UI in their existing component folders.
 - Follow the local Tailwind and component style already in the app (dark theme, CSS variables).
 - No global state library — each panel manages its own state via `useState` + polling.

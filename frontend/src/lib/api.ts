@@ -200,7 +200,20 @@ export interface Document {
   summary: string | null;
   status: DocumentStatus;
   error_message: string | null;
+  progress?: DocumentProgress;
   created_at: string;
+  updated_at: string;
+}
+
+export interface DocumentProgress {
+  stage: string;
+  stage_label: string;
+  percent: number;
+  message: string;
+  current: number;
+  total: number;
+  estimated_minutes?: number;
+  estimate_note?: string;
   updated_at: string;
 }
 

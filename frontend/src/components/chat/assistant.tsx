@@ -11,6 +11,7 @@ import {
 } from "@/lib/api";
 import {
   createMessageDebugSnapshot,
+  selectLiveMessagesForDisplay,
   shouldUseLiveMessages,
 } from "./message-display";
 import type { DisplayRun } from "./thread/types";
@@ -338,6 +339,7 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
           isInitialHistoryLoading,
         });
         const sm = canUseLiveMessages ? rawMsgs ?? [] : [];
+        const historyMessages = flattenHistoryRuns(historyRuns);
 
         // 1) Filter hidden
         const visible = sm.filter((m: any) => !isHiddenMessage(m));
@@ -364,12 +366,19 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
           }
         }
 
-        setActiveRunMessages(stableMessages);
+        const liveMessages = selectLiveMessagesForDisplay({
+          canUseLiveMessages,
+          historyMessages,
+          streamMessages: stableMessages,
+          getMessageKey: messageKey,
+        });
+
+        setActiveRunMessages(liveMessages);
         const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, stableMessages);
         const runs = buildDisplayedRuns({
           historyRuns,
           activeRunId,
-          activeRunMessages: stableMessages,
+          activeRunMessages: liveMessages,
           optimisticMessages: optimistic,
         });
         const merged = flattenDisplayRuns(runs);
@@ -378,9 +387,9 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
             phase: "display-raf",
             threadId,
             isLoading: loading,
-            historyMessages: flattenHistoryRuns(historyRuns),
+            historyMessages,
             streamMessages: stableMessages,
-            liveMessages: stableMessages,
+            liveMessages,
             displayedMessages: merged,
             optimisticMessages: optimistic,
             getMessageKey: messageKey,
@@ -423,13 +432,20 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
         isInitialHistoryLoading,
       });
       const sm = canUseLiveMessages ? rawMsgs ?? [] : [];
+      const historyMessages = flattenHistoryRuns(historyRuns);
       const visible = sm.filter((m: any) => !isHiddenMessage(m));
-      setActiveRunMessages(visible);
+      const liveMessages = selectLiveMessagesForDisplay({
+        canUseLiveMessages,
+        historyMessages,
+        streamMessages: visible,
+        getMessageKey: messageKey,
+      });
+      setActiveRunMessages(liveMessages);
       const optimistic = filterConfirmedOptimisticMessages(optimisticMessages, visible);
       const runs = buildDisplayedRuns({
         historyRuns,
         activeRunId,
-        activeRunMessages: visible,
+        activeRunMessages: liveMessages,
         optimisticMessages: optimistic,
       });
       const merged = flattenDisplayRuns(runs);
@@ -438,9 +454,9 @@ export function Assistant({ workspaceId, pptStyle, voiceId, currentPptTaskId, on
           phase: "display-immediate",
           threadId,
           isLoading: stream.isLoading,
-          historyMessages: flattenHistoryRuns(historyRuns),
+          historyMessages,
           streamMessages: visible,
-          liveMessages: visible,
+          liveMessages,
           displayedMessages: merged,
           optimisticMessages: optimistic,
           getMessageKey: messageKey,
@@ -647,8 +663,10 @@ function buildDisplayedRuns({
   activeRunMessages: any[];
   optimisticMessages: OptimisticHumanMessage[];
 }): DisplayRun[] {
+  const activeRawMessages = mergeMessages(activeRunMessages, optimisticMessages);
+  const shouldPreferActiveRun = activeRunId != null && activeRawMessages.length > 0;
   const persistedRuns =
-    activeRunId == null
+    !shouldPreferActiveRun
       ? historyRuns
       : historyRuns.filter((run) => run.run_id !== activeRunId);
   const displayRuns: DisplayRun[] = persistedRuns.map((run) => ({
@@ -660,7 +678,7 @@ function buildDisplayedRuns({
   const persistedMessageKeys = new Set(
     persistedRuns.flatMap((run) => run.messages).map(messageKey),
   );
-  const activeMessages = mergeMessages(activeRunMessages, optimisticMessages).filter(
+  const activeMessages = activeRawMessages.filter(
     (message) => !persistedMessageKeys.has(messageKey(message)),
   );
   if (activeMessages.length > 0) {

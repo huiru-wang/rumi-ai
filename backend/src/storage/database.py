@@ -44,6 +44,7 @@ class Database:
                 storage_path TEXT,
                 status TEXT DEFAULT 'uploaded',
                 error_message TEXT,
+                progress_data TEXT,
                 created_at TEXT DEFAULT (datetime('now', 'localtime')),
                 updated_at TEXT DEFAULT (datetime('now', 'localtime'))
             );
@@ -121,6 +122,10 @@ class Database:
             )
             await self.connection.execute(
                 "CREATE INDEX IF NOT EXISTS idx_document_hash ON document(workspace_id, content_hash)"
+            )
+        if "progress_data" not in columns:
+            await self.connection.execute(
+                "ALTER TABLE document ADD COLUMN progress_data TEXT"
             )
 
         # workspace: add ext_data column with default config
@@ -765,13 +770,35 @@ class Database:
         file_type: str,
         storage_path: str,
         content_hash: str = "",
+        progress_data: dict | None = None,
     ) -> dict:
         doc_id = str(uuid.uuid4())
         now = datetime.now().isoformat()
+        initial_progress = progress_data or {
+            "stage": "uploaded",
+            "stage_label": "等待解析",
+            "percent": 0,
+            "message": "文档已上传，等待解析",
+            "current": 0,
+            "total": 0,
+            "updated_at": now,
+        }
+        initial_progress["updated_at"] = now
         await self.connection.execute(
-            "INSERT INTO document (id, workspace_id, filename, file_type, storage_path, content_hash, status, created_at, updated_at) "
-            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            (doc_id, workspace_id, filename, file_type, storage_path, content_hash, "uploaded", now, now),
+            "INSERT INTO document (id, workspace_id, filename, file_type, storage_path, content_hash, status, progress_data, created_at, updated_at) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            (
+                doc_id,
+                workspace_id,
+                filename,
+                file_type,
+                storage_path,
+                content_hash,
+                "uploaded",
+                json.dumps(initial_progress, ensure_ascii=False),
+                now,
+                now,
+            ),
         )
         await self.connection.commit()
         return {
@@ -784,6 +811,7 @@ class Database:
             "summary": None,
             "status": "uploaded",
             "error_message": None,
+            "progress_data": json.dumps(initial_progress, ensure_ascii=False),
             "created_at": now,
             "updated_at": now,
         }

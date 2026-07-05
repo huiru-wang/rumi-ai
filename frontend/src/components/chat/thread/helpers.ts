@@ -128,6 +128,38 @@ export function isNearBottom(element: HTMLElement): boolean {
   return element.scrollHeight - element.scrollTop - element.clientHeight < 120;
 }
 
+export function getMessageScrollSignature(messages: any[]): string {
+  const last = messages[messages.length - 1];
+  if (!last) return "empty";
+  const type = last._getType?.() || last.type || last.role || "message";
+  const id = last.id || last.message_id || "";
+  const contentLength = getContentLength(last.content);
+  const toolCalls = Array.isArray(last.tool_calls) ? last.tool_calls.length : 0;
+  const toolCallId = last.tool_call_id || "";
+  return `${type}:${id}:${contentLength}:${toolCalls}:${toolCallId}`;
+}
+
+export function shouldDisableAutoScrollOnWheel({
+  deltaY,
+  isNearBottom,
+}: {
+  deltaY: number;
+  isNearBottom: boolean;
+}): boolean {
+  if (deltaY < 0) return true;
+  return !isNearBottom;
+}
+
+export function shouldRestoreAutoScrollFromPosition({
+  userOverride,
+  isNearBottom,
+}: {
+  userOverride: boolean;
+  isNearBottom: boolean;
+}): boolean {
+  return userOverride && isNearBottom;
+}
+
 // ============================================================
 // Message grouping
 // ============================================================
@@ -216,4 +248,9 @@ export function extractToolResultText(result: unknown): string {
     }
   }
   return "";
+}
+
+function getContentLength(content: unknown): number {
+  if (typeof content === "string") return content.length;
+  return JSON.stringify(content ?? "").length;
 }

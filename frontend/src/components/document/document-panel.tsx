@@ -8,6 +8,7 @@ import {
   Loader2,
   AlertCircle,
   X,
+  Info,
 } from "lucide-react";
 import {
   listDocuments,
@@ -232,9 +233,22 @@ function DocumentItem({ document, onDelete }: DocumentItemProps) {
   const fileTypeLabel =
     FILE_TYPE_LABELS[document.file_type] ?? document.file_type;
   const isActive = ACTIVE_STATUSES.has(document.status);
+  const progress = document.progress;
+  const progressPercent = Math.max(0, Math.min(100, progress?.percent ?? 0));
+  const progressLabel = progress?.stage_label || statusConfig.label;
+  const pageLabel =
+    progress && progress.total > 0
+      ? ` · ${progress.current}/${progress.total} 页`
+      : "";
+  const estimateText =
+    progress?.estimated_minutes && progress.estimated_minutes > 0
+      ? `预计约 ${progress.estimated_minutes} 分钟`
+      : "";
   const detail =
     document.status === "error"
       ? document.error_message || "处理失败"
+      : isActive && progress
+        ? `${progress.message || progressLabel}${pageLabel}`
       : document.summary
         ? `${document.summary.slice(0, 40)}...`
         : statusConfig.label;
@@ -258,6 +272,33 @@ function DocumentItem({ document, onDelete }: DocumentItemProps) {
         <p className="mt-0.5 text-[10px] text-muted-foreground">
           {fileTypeLabel} · {detail}
         </p>
+        {isActive && estimateText && (
+          <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
+            <span>{estimateText}</span>
+            {progress?.estimate_note && (
+              <span className="group/info relative inline-flex">
+                <Info size={11} className="text-muted-foreground/70" />
+                <span className="pointer-events-none absolute left-1/2 top-0 z-50 hidden w-48 -translate-x-1/2 -translate-y-full rounded-md border border-border bg-muted px-2 py-1.5 text-[10px] leading-relaxed text-foreground shadow-lg group-hover/info:block">
+                  {progress.estimate_note}
+                </span>
+              </span>
+            )}
+          </div>
+        )}
+        {isActive && progress && (
+          <div className="mt-1.5">
+            <div className="mb-1 flex items-center justify-between text-[10px] text-muted-foreground/80">
+              <span>{progressLabel}</span>
+              <span>{progressPercent}%</span>
+            </div>
+            <div className="h-1 overflow-hidden rounded-full bg-muted">
+              <div
+                className="h-full rounded-full bg-accent transition-all duration-300"
+                style={{ width: `${progressPercent}%` }}
+              />
+            </div>
+          </div>
+        )}
       </div>
       <button
         onClick={() => onDelete(document.id)}

@@ -149,6 +149,7 @@ def _sanitize_document(doc: dict) -> dict:
     data = dict(doc)
     data.pop("storage_path", None)
     data.pop("content_hash", None)
+    data["progress"] = _parse_json_object(data.pop("progress_data", None))
     return data
 
 
@@ -1015,6 +1016,34 @@ async def view_file(file_path: str, thumb: int = Query(default=0)):
     """
     logger.info("[API] GET /api/file-view/%s thumb=%s", file_path, thumb)
     raise HTTPException(status_code=410, detail="Path-based file access is disabled")
+
+
+@app.get("/api/documents/{doc_id}/asset/{filename:path}")
+async def preview_document_asset(doc_id: str, filename: str):
+    """Serve an extracted document asset without exposing storage paths."""
+    logger.info("[API] GET /api/documents/%s/asset/%s", doc_id, filename)
+    relative = PurePosixPath(filename)
+    if relative.is_absolute() or ".." in relative.parts:
+        raise HTTPException(status_code=400, detail="Invalid asset path")
+    if db.connection is None:
+        await db.initialize()
+    cursor = await db.connection.execute(
+        "SELECT * FROM document WHERE id = ?",
+        (doc_id,),
+    )
+    row = await cursor.fetchone()
+    if not row:
+        raise HTTPException(status_code=404, detail="Document not found")
+    doc = dict(row)
+    storage_path = str(doc.get("storage_path", ""))
+    if not storage_path:
+        raise HTTPException(status_code=404, detail="Document asset not found")
+    asset_dir = f"{Path(doc.get('filename', '')).stem}_assets"
+    if Path(storage_path).is_absolute():
+        asset_path = str(Path(storage_path).parent / asset_dir / str(relative))
+    else:
+        asset_path = str(PurePosixPath(storage_path).parent / asset_dir / relative)
+    return await _serve_file(asset_path, disposition="inline")
 
 
 # --- Static assets for PPT skill ---

@@ -17,6 +17,7 @@ logger = logging.getLogger(__name__)
 
 # Patterns for RAG source attribution markers that must not appear in narration text
 _REF_PATTERNS = [
+    re.compile(r'\[ref:[^\]]*\]'),
     re.compile(r'\{1,2\s*ref:[^}]*\}{1,2}'),
     re.compile(r'ref:[^\s<>"]+\|[^\s<>"]+'),
     re.compile(r'\[片段\d+\]\s*'),

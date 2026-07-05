@@ -4,6 +4,9 @@ from langchain.tools import tool, ToolRuntime
 
 from src.agent.state import MainAgentState
 from src.storage.vector_store import VectorStore
+from pathlib import PurePosixPath
+
+from src.url_utils import build_document_asset_url
 
 logger = logging.getLogger(__name__)
 
@@ -37,6 +40,63 @@ def _format_location(result: dict) -> str:
     return " | ".join(parts)
 
 
+def _format_page(result: dict) -> str:
+    page_start = result.get("page_start", 0)
+    page_end = result.get("page_end", 0)
+    if page_start > 0:
+        if page_end > page_start:
+            return f"第{page_start}-{page_end}页"
+        return f"第{page_start}页"
+    return "-"
+
+
+def _format_ref_marker(result: dict) -> str:
+    """Build the citation marker copied by the LLM: [ref:文档名|页码|一级标题|二级标题]."""
+    filename = result.get("filename", "unknown")
+    page = _format_page(result)
+    chapter = (result.get("chapter_title", "") or "").strip()
+    section = (result.get("section_title", "") or "").strip()
+
+    parts = [filename, page]
+    if chapter:
+        parts.append(chapter)
+    if section and section != chapter:
+        parts.append(section)
+    return f"[ref:{'|'.join(parts)}]"
+
+
+def _format_result(index: int, result: dict) -> str:
+    filename = result.get("filename", "unknown")
+    location = _format_location(result)
+    ref_marker = _format_ref_marker(result)
+    block_type = result.get("block_type", "") or "text"
+    text = result.get("text", "")
+    caption = result.get("caption", "")
+    asset_path = result.get("asset_path", "")
+    doc_id = result.get("doc_id", "")
+
+    header = f"[片段{index + 1}] 📄 {filename} | {location}\n来源索引：{ref_marker}"
+    if block_type in ("image", "chart") and asset_path and doc_id:
+        alt = caption or "文档图片"
+        asset_filename = PurePosixPath(asset_path).name
+        url = build_document_asset_url(doc_id, asset_filename)
+        logger.info(
+            "[Tool:rag_search] public url built: asset_path=%s url=%s",
+            asset_path,
+            url,
+        )
+        image_markdown = f"![{alt}]({url})"
+        return (
+            f"{header}\n{text}\n\n"
+            "可直接用于最终回答的图片 Markdown（若与用户问题相关，请原样保留）：\n"
+            f"{image_markdown}"
+        )
+    if block_type == "table":
+        label = caption or "文档表格"
+        return f"{header}\n表格片段：{label}\n{text}"
+    return f"{header}\n{text}"
+
+
 def create_rag_search_tool(vector_store: VectorStore):
     @tool
     def rag_search(runtime: ToolRuntime[MainAgentState], query: str, top_k: int = 5, doc_id: str = "", **kwargs) -> str:
@@ -64,11 +124,13 @@ def create_rag_search_tool(vector_store: VectorStore):
             return "未找到相关文档内容。"
         output = []
         for i, result in enumerate(results):
-            filename = result.get("filename", "unknown")
-            location = _format_location(result)
-            output.append(
-                f"[片段{i + 1}] 📄 {filename} | {location}\n{result['text']}"
+            logger.info(
+                "[Tool:rag_search] hit: rank=%d type=%s asset_path=%s",
+                i + 1,
+                result.get("block_type", ""),
+                result.get("asset_path", ""),
             )
+            output.append(_format_result(i, result))
         logger.info("[Tool:rag_search] returned %d results", len(results))
         return "\n\n".join(output)
 

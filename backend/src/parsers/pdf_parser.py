@@ -2,10 +2,11 @@
 
 import logging
 import re
+from typing import Awaitable, Callable
 
 import fitz
 
-from src.parsers.base import DocumentSection
+from src.parsers.base import DocumentAsset, DocumentBlock, DocumentSection, ParsedDocument
 
 logger = logging.getLogger(__name__)
 
@@ -16,6 +17,17 @@ MIN_HEADING_FONT_SIZE = 11.0
 
 class PdfParser:
     """Extract structured sections from PDF files with page numbers."""
+
+    def page_count(self, source: str | bytes) -> int:
+        """Return PDF page count without running full parsing."""
+        if isinstance(source, bytes):
+            doc = fitz.open(stream=source, filetype="pdf")
+        else:
+            doc = fitz.open(source)
+        try:
+            return int(doc.page_count)
+        finally:
+            doc.close()
 
     def parse(self, source: str | bytes) -> list[DocumentSection]:
         """Parse a PDF file.
@@ -39,6 +51,136 @@ class PdfParser:
                 "[PdfParser] extracted %d sections", len(sections),
             )
             return sections
+        finally:
+            doc.close()
+
+    async def parse_blocks(
+        self,
+        source: str | bytes,
+        asset_saver: Callable[[str, bytes], Awaitable[str]] | None = None,
+        filename: str = "document.pdf",
+        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
+    ) -> ParsedDocument:
+        """Parse PDF into reading-order blocks and extracted image assets."""
+        if isinstance(source, bytes):
+            doc = fitz.open(stream=source, filetype="pdf")
+        else:
+            doc = fitz.open(source)
+        try:
+            logger.info("[PdfParser] start parse_blocks: filename=%s pages=%d", filename, doc.page_count)
+            text_blocks = await self._extract_blocks_with_progress(doc, progress_callback)
+            body_size = self._detect_body_font_size(text_blocks)
+            logger.info("[PdfParser] body font detected: size=%s", body_size)
+            blocks: list[DocumentBlock] = []
+            assets: list[DocumentAsset] = []
+            active_title = ""
+            order = 0
+            image_count = 0
+
+            for block in text_blocks:
+                is_heading = self._is_heading(block, body_size)
+                block_type = "title" if is_heading else "paragraph"
+                level = self._heading_level(block, body_size) if is_heading else 0
+                if is_heading:
+                    active_title = block["text"]
+                blocks.append(
+                    DocumentBlock(
+                        id=f"pdf-{order}",
+                        type=block_type,
+                        text=block["text"],
+                        level=level,
+                        page_start=block["page"],
+                        page_end=block["page"],
+                        bbox=block.get("bbox"),
+                        parent_title="" if is_heading else active_title,
+                        order=order,
+                    )
+                )
+                order += 1
+
+            seen_xrefs: set[int] = set()
+            for page_num, page in enumerate(doc, start=1):
+                page_image_count = 0
+                for image in page.get_images(full=True):
+                    xref = image[0]
+                    if xref in seen_xrefs:
+                        continue
+                    seen_xrefs.add(xref)
+                    try:
+                        extracted = doc.extract_image(xref)
+                        image_bytes = extracted.get("image", b"")
+                        ext = extracted.get("ext", "png")
+                        asset_path = ""
+                        if asset_saver and image_bytes:
+                            asset_path = await asset_saver(f"image_{order:04d}.{ext}", image_bytes)
+                        block = DocumentBlock(
+                            id=f"pdf-{order}",
+                            type="image",
+                            page_start=page_num,
+                            page_end=page_num,
+                            parent_title=active_title,
+                            asset_path=asset_path,
+                            order=order,
+                        )
+                        blocks.append(block)
+                        if asset_path:
+                            assets.append(
+                                DocumentAsset(
+                                    id=block.id,
+                                    type=block.type,
+                                    path=asset_path,
+                                    filename=f"image_{order:04d}.{ext}",
+                                    page=page_num,
+                                )
+                            )
+                        logger.info(
+                            "[PdfParser] image extracted: page=%d xref=%d size=%d path=%s",
+                            page_num,
+                            xref,
+                            len(image_bytes),
+                            asset_path,
+                        )
+                        order += 1
+                        image_count += 1
+                        page_image_count += 1
+                    except Exception as exc:
+                        logger.warning(
+                            "[PdfParser] image extraction failed: page=%d xref=%d error=%s",
+                            page_num,
+                            xref,
+                            exc,
+                        )
+                logger.info(
+                    "[PdfParser] page parsed: page=%d image_blocks=%d",
+                    page_num,
+                    page_image_count,
+                )
+                if progress_callback:
+                    await progress_callback(page_num, doc.page_count)
+                if hasattr(page, "find_tables"):
+                    try:
+                        table_result = page.find_tables()
+                        table_count = len(getattr(table_result, "tables", []) or [])
+                        if table_count:
+                            logger.info(
+                                "[PdfParser] table extraction detected but skipped in MVP: page=%d tables=%d",
+                                page_num,
+                                table_count,
+                            )
+                    except Exception as exc:
+                        logger.info(
+                            "[PdfParser] table extraction skipped/failed: page=%d reason=%s",
+                            page_num,
+                            exc,
+                        )
+
+            logger.info(
+                "[PdfParser] done: blocks=%d images=%d tables=%d",
+                len(blocks),
+                image_count,
+                0,
+            )
+            return ParsedDocument(title=filename, blocks=blocks, assets=assets)
         finally:
             doc.close()
 
@@ -73,8 +215,47 @@ class PdfParser:
                                 "size": max_size,
                                 "bold": is_bold,
                                 "page": page_num,
+                                "bbox": [float(v) for v in line.get("bbox", [])],
                             }
                         )
+        return blocks
+
+    async def _extract_blocks_with_progress(
+        self,
+        doc: fitz.Document,
+        progress_callback: Callable[[int, int], Awaitable[None]] | None = None,
+    ) -> list[dict]:
+        """Extract text spans and report page-level progress for async parsing."""
+        blocks = []
+        for page_num, page in enumerate(doc, start=1):
+            text_dict = page.get_text("dict", flags=fitz.TEXT_PRESERVE_WHITESPACE)
+            for block in text_dict.get("blocks", []):
+                if block.get("type") != 0:
+                    continue
+                for line in block.get("lines", []):
+                    line_text = ""
+                    max_size = 0.0
+                    is_bold = False
+                    for span in line.get("spans", []):
+                        line_text += span.get("text", "")
+                        size = span.get("size", 0)
+                        if size > max_size:
+                            max_size = size
+                        if "bold" in span.get("font", "").lower():
+                            is_bold = True
+                    line_text = line_text.strip()
+                    if line_text:
+                        blocks.append(
+                            {
+                                "text": line_text,
+                                "size": max_size,
+                                "bold": is_bold,
+                                "page": page_num,
+                                "bbox": [float(v) for v in line.get("bbox", [])],
+                            }
+                        )
+            if progress_callback:
+                await progress_callback(page_num, doc.page_count)
         return blocks
 
     def _detect_body_font_size(self, blocks: list[dict]) -> float:

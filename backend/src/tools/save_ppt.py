@@ -13,6 +13,8 @@ logger = logging.getLogger(__name__)
 
 # Patterns for RAG source attribution markers that must not appear in PPT HTML
 _REF_PATTERNS = [
+    # [ref:filename|page|h1|h2]
+    re.compile(r'\[ref:[^\]]*\]'),
     # {{ref:filename|chapter}} or {ref:filename|chapter}
     re.compile(r'\{1,2\s*ref:[^}]*\}{1,2}'),
     # ref:filename|chapter (standalone, e.g. in slide text)

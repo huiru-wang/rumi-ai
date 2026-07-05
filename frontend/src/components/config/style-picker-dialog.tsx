@@ -3,6 +3,11 @@
 import { useEffect, useRef, useState, useCallback } from "react";
 import { X, Check, ArrowLeft, Trash2, Loader2 } from "lucide-react";
 import { deletePptStyle, getPptStylePreviewUrl, type PptStyleInfo } from "@/lib/api";
+import {
+  getPptStyleCategoryGroups,
+  normalizePptStyleCategory,
+  type PptStyleCategoryId,
+} from "./style-categories";
 
 interface StylePickerDialogProps {
   selectedId: string;
@@ -11,12 +16,6 @@ interface StylePickerDialogProps {
   onClose: () => void;
   onDelete?: (style: PptStyleInfo) => void;
 }
-
-const CATEGORY_LABELS: Record<string, string> = {
-  dark: "深色主题",
-  light: "浅色主题",
-  custom: "我的主题",
-};
 
 export function StylePickerDialog({
   selectedId,
@@ -30,6 +29,7 @@ export function StylePickerDialog({
   const [previewLoading, setPreviewLoading] = useState(false);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [deleting, setDeleting] = useState(false);
+  const [activeCategory, setActiveCategory] = useState<PptStyleCategoryId | null>(null);
 
   // Close on Escape only — priority: delete confirm → preview → dialog
   useEffect(() => {
@@ -49,7 +49,13 @@ export function StylePickerDialog({
     return () => document.removeEventListener("keydown", handleKey);
   }, [onClose, previewStyle, confirmDeleteId]);
 
-  const categories = ["dark", "light", "custom"] as const;
+  const categoryGroups = getPptStyleCategoryGroups(styles);
+  const selectedStyle = styles.find((style) => style.id === selectedId);
+  const selectedCategory = selectedStyle
+    ? normalizePptStyleCategory(selectedStyle.category)
+    : "business";
+  const currentCategory = activeCategory ?? selectedCategory;
+  const activeGroup = categoryGroups.find((group) => group.id === currentCategory) ?? categoryGroups[0];
 
   const handleDelete = async (style: PptStyleInfo) => {
     console.log("[StylePicker] deleting style:", style.id, style.name);
@@ -133,84 +139,124 @@ export function StylePickerDialog({
             </div>
           </div>
         ) : (
-          <div className="flex-1 overflow-y-auto p-5">
-            {categories.map((cat) => {
-              const catStyles = styles.filter((s) => s.category === cat);
-              if (catStyles.length === 0) return null;
-              return (
-                <div key={cat} className="mb-5 last:mb-0">
-                  <h3 className="mb-2.5 text-xs font-medium uppercase tracking-wider text-muted-foreground">
-                    {CATEGORY_LABELS[cat]}
+          <div className="grid min-h-0 flex-1 grid-cols-[220px_1fr] overflow-hidden">
+            <div className="border-r border-border bg-muted/20 p-3">
+              <div className="space-y-1">
+                {categoryGroups.map((group) => {
+                  const isActive = group.id === currentCategory;
+                  return (
+                    <button
+                      key={group.id}
+                      onClick={() => setActiveCategory(group.id)}
+                      className={`w-full rounded-lg px-3 py-2.5 text-left transition-colors ${
+                        isActive
+                          ? "bg-accent/15 text-accent"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      <div className="flex items-center justify-between gap-3">
+                        <span className="text-xs font-medium">{group.label}</span>
+                        <span className="rounded-full bg-background/70 px-1.5 py-0.5 text-[10px] text-muted-foreground">
+                          {group.styles.length}
+                        </span>
+                      </div>
+                      <p className="mt-1 line-clamp-2 text-[10px] leading-snug opacity-80">
+                        {group.description}
+                      </p>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="min-h-0 overflow-y-auto p-5">
+              <div className="mb-4 flex items-end justify-between gap-3">
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {activeGroup.label}
                   </h3>
-                  <div className="grid grid-cols-3 gap-2.5">
-                    {catStyles.map((style) => {
-                      const isSelected = style.id === selectedId;
-                      const isCustom = style.category === "custom";
-                      return (
-                        <div
-                          key={style.id}
-                          className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all ${isSelected
+                  <p className="mt-1 text-xs text-muted-foreground">
+                    {activeGroup.description}
+                  </p>
+                </div>
+              </div>
+
+              {activeGroup.styles.length === 0 ? (
+                <div className="flex h-[360px] items-center justify-center rounded-xl border border-dashed border-border bg-muted/20">
+                  <p className="text-xs text-muted-foreground">
+                    该分类下暂时没有系统模板
+                  </p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-3 xl:grid-cols-3">
+                  {activeGroup.styles.map((style) => {
+                    const isSelected = style.id === selectedId;
+                    const isCustom = normalizePptStyleCategory(style.category) === "custom";
+                    return (
+                      <div
+                        key={style.id}
+                        className={`group relative flex flex-col overflow-hidden rounded-xl border text-left transition-all ${
+                          isSelected
                             ? "border-accent ring-1 ring-accent"
                             : "border-border hover:border-accent/50"
-                            }`}
+                        }`}
+                      >
+                        <button
+                          onClick={() => onSelect(style.id)}
+                          className="relative block aspect-[16/9] w-full cursor-pointer overflow-hidden bg-muted"
                         >
-                          <button
-                            onClick={() => onSelect(style.id)}
-                            className="relative block aspect-[16/9] w-full cursor-pointer overflow-hidden bg-muted"
-                          >
-                            <iframe
-                              src={getPptStylePreviewUrl(style.id, true)}
-                              title={style.name}
-                              className="h-full w-full border-0 pointer-events-none"
-                              loading="lazy"
-                              tabIndex={-1}
-                            />
-                            {isSelected && (
-                              <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
-                                <Check size={12} className="text-background" />
-                              </div>
-                            )}
-                          </button>
-                          <div className="flex items-center justify-between px-3 py-2">
-                            <div className="min-w-0 flex-1">
-                              <p className="truncate text-xs font-medium text-foreground">
-                                {style.name}
-                              </p>
-                              <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">
-                                {style.description}
-                              </p>
+                          <iframe
+                            src={getPptStylePreviewUrl(style.id, true)}
+                            title={style.name}
+                            className="pointer-events-none h-full w-full border-0"
+                            loading="lazy"
+                            tabIndex={-1}
+                          />
+                          {isSelected && (
+                            <div className="absolute right-2 top-2 flex h-5 w-5 items-center justify-center rounded-full bg-accent">
+                              <Check size={12} className="text-background" />
                             </div>
-                            <div className="ml-2 flex shrink-0 items-center gap-1">
-                              {isCustom && (
-                                <button
-                                  onClick={(e) => {
-                                    e.stopPropagation();
-                                    setConfirmDeleteId(style.id);
-                                  }}
-                                  className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-red-500/15 hover:text-red-400"
-                                  title="删除"
-                                >
-                                  <Trash2 size={12} />
-                                </button>
-                              )}
+                          )}
+                        </button>
+                        <div className="flex items-center justify-between px-3 py-2">
+                          <div className="min-w-0 flex-1">
+                            <p className="truncate text-xs font-medium text-foreground">
+                              {style.name}
+                            </p>
+                            <p className="mt-0.5 truncate text-[10px] leading-tight text-muted-foreground">
+                              {style.description}
+                            </p>
+                          </div>
+                          <div className="ml-2 flex shrink-0 items-center gap-1">
+                            {isCustom && (
                               <button
                                 onClick={(e) => {
                                   e.stopPropagation();
-                                  handlePreview(style);
+                                  setConfirmDeleteId(style.id);
                                 }}
-                                className="rounded-md bg-accent/15 px-2.5 py-1 text-[10px] font-medium text-accent transition-colors hover:bg-accent/25"
+                                className="rounded-md p-1.5 text-muted-foreground/60 transition-colors hover:bg-red-500/15 hover:text-red-400"
+                                title="删除"
                               >
-                                预览模版
+                                <Trash2 size={12} />
                               </button>
-                            </div>
+                            )}
+                            <button
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                handlePreview(style);
+                              }}
+                              className="rounded-md bg-accent/15 px-2.5 py-1 text-[10px] font-medium text-accent transition-colors hover:bg-accent/25"
+                            >
+                              预览模板
+                            </button>
                           </div>
                         </div>
-                      );
-                    })}
-                  </div>
+                      </div>
+                    );
+                  })}
                 </div>
-              );
-            })}
+              )}
+            </div>
           </div>
         )}
       </div>

@@ -6,10 +6,16 @@ from langchain.agents.middleware import AgentMiddleware, ModelRequest, ModelResp
 from langchain_core.messages import SystemMessage
 from langgraph.runtime import Runtime
 
+from src.logging_utils import is_debug_logging_enabled
 from src.managers.prompt_manager import PromptManager
 from src.storage.database import Database
 
 logger = logging.getLogger(__name__)
+
+
+def _prompt_table_cell(value: object) -> str:
+    text = "" if value is None else str(value)
+    return text.replace("\n", " ").replace("|", "｜").strip()
 
 
 class ContextInjectMiddleware(AgentMiddleware):
@@ -28,17 +34,23 @@ class ContextInjectMiddleware(AgentMiddleware):
         ppt_style = request.state.get("ppt_style", "")
         voice_id = request.state.get("voice_id", "")
         current_ppt_task_id = request.state.get("current_ppt_task_id", "")
-        doc_summaries = []
+        docs_info = []
         tasks_info = []
 
         if self.db:
             if self.db.connection is None:
                 await self.db.initialize()
             docs = await self.db.list_documents(workspace_id)
-            doc_summaries = [
-                f"[{d['filename']}](doc_id:{d['id']}): {d['summary']}"
+            docs_info = [
+                {
+                    "id": d.get("id", ""),
+                    "filename": d.get("filename", ""),
+                    "type": d.get("file_type", ""),
+                    "status": d.get("status", ""),
+                    "summary": d.get("summary", "") or "",
+                    "error": d.get("error_message", "") or "",
+                }
                 for d in docs
-                if d.get("summary")
             ]
 
             # Query current tasks and inject them as the latest workspace task facts.
@@ -106,9 +118,40 @@ class ContextInjectMiddleware(AgentMiddleware):
 
         # Build dynamic system prompt
         prompt = self._prompt_manager.get_system_prompt()
-        if doc_summaries:
-            summaries_text = "\n".join(f"- {s}" for s in doc_summaries)
-            prompt += f"\n\n## 当前知识库文档摘要\n{summaries_text}"
+        if docs_info:
+            rows = []
+            for d in docs_info:
+                note = d["summary"] or d["error"] or ""
+                rows.append(
+                    "| "
+                    + " | ".join(
+                        [
+                            _prompt_table_cell(d["id"]),
+                            _prompt_table_cell(d["filename"]),
+                            _prompt_table_cell(d["type"]),
+                            _prompt_table_cell(d["status"]),
+                            _prompt_table_cell(note),
+                        ]
+                    )
+                    + " |"
+                )
+            table = (
+                "| 文档ID | 文件名 | 类型 | 状态 | 摘要或说明 |\n"
+                "|--------|--------|------|------|------------|\n"
+            ) + "\n".join(rows)
+            prompt += (
+                f"\n\n## 当前知识库文档列表\n"
+                f"以下列表是当前工作区的最新文档数据，也是判断知识库文档是否存在、是否可用于检索的唯一依据。\n"
+                f"只有状态为 ready 的文档可用于 rag_search、知识问答、PPT 内容生成和引用标注。\n"
+                f"状态为 uploaded、parsing、parsed、chunking、indexing、summarizing 的文档仍在处理中，不要声称已可检索；状态为 error 的文档不可用。\n"
+                f"当用户问题涉及某篇文档时，优先使用该文档对应的 doc_id 调用 rag_search。\n\n"
+                f"{table}"
+            )
+        else:
+            prompt += (
+                f"\n\n## 当前知识库文档列表\n"
+                f"当前工作区没有任何文档。知识问答和 PPT 内容生成都没有可用知识库来源；不要根据对话历史假设文档仍然存在。"
+            )
 
         # Fetch workspace once for both ppt_style and voice_info
         ws = None
@@ -182,7 +225,21 @@ class ContextInjectMiddleware(AgentMiddleware):
             rows = []
             for t in tasks_info:
                 rows.append(
-                    f"| {t['id']} | {t['type']} | {t['status']} | {t['title']} | {t['topic']} | {t['summary']} | {t.get('style', '')} | {t['parent']} | {t['children']} |"
+                    "| "
+                    + " | ".join(
+                        [
+                            _prompt_table_cell(t["id"]),
+                            _prompt_table_cell(t["type"]),
+                            _prompt_table_cell(t["status"]),
+                            _prompt_table_cell(t["title"]),
+                            _prompt_table_cell(t["topic"]),
+                            _prompt_table_cell(t["summary"]),
+                            _prompt_table_cell(t.get("style", "")),
+                            _prompt_table_cell(t["parent"]),
+                            _prompt_table_cell(t["children"]),
+                        ]
+                    )
+                    + " |"
                 )
             table = (
                 "| 任务ID | 类型 | 状态 | 标题 | 主题 | 摘要 | 风格 | 父任务 | 子任务 |\n"
@@ -204,16 +261,33 @@ class ContextInjectMiddleware(AgentMiddleware):
                 f"对话历史中曾出现的任务、PPT、口播稿或任务 ID，均视为当前不存在或已删除。"
             )
 
-        logger.info(
-            f"""
-            [ContextInjectMiddleware] context_inject | 
-            workspaceId={workspace_id} | 
-            ppt_style={ppt_style} | 
-            voice_id={voice_id} | 
-            current_ppt_task_id={current_ppt_task_id} | 
-            system_prompt={prompt}
-            """
-        )
+        if is_debug_logging_enabled():
+            logger.info(
+                "[ContextInjectMiddleware] context_inject_debug | "
+                "workspace_id=%s | ppt_style=%s | voice_id=%s | current_ppt_task_id=%s | "
+                "docs=%d | tasks=%d | prompt_chars=%d | system_prompt=%s",
+                workspace_id,
+                ppt_style,
+                voice_id,
+                current_ppt_task_id,
+                len(docs_info),
+                len(tasks_info),
+                len(prompt),
+                prompt,
+            )
+        else:
+            logger.info(
+                "[ContextInjectMiddleware] context_inject | "
+                "workspace_id=%s | ppt_style=%s | voice_id=%s | current_ppt_task_id=%s | "
+                "docs=%d | tasks=%d | prompt_chars=%d",
+                workspace_id,
+                ppt_style,
+                voice_id,
+                current_ppt_task_id,
+                len(docs_info),
+                len(tasks_info),
+                len(prompt),
+            )
 
         request = request.override(system_message=SystemMessage(content=prompt))
         return await handler(request)

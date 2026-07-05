@@ -1,6 +1,8 @@
 import logging
 import os
+import time
 import uuid
+from collections import Counter
 
 import chromadb
 import dashscope
@@ -48,8 +50,34 @@ class VectorStore:
         self._host = host
         self._port = port
         self._embedding_fn = embedding_fn or DashscopeEmbeddingFunction()
-        self._client = chromadb.HttpClient(host=host, port=port)
+        self._client = self._connect_client(host, port)
         logger.info("[VectorStore] connected to ChromaDB server at %s:%s", host, port)
+
+    def _connect_client(self, host: str, port: int):
+        retries = max(int(os.getenv("CHROMA_CONNECT_RETRIES", "60")), 1)
+        delay = float(os.getenv("CHROMA_CONNECT_RETRY_DELAY", "1"))
+        last_exc: Exception | None = None
+        for attempt in range(1, retries + 1):
+            try:
+                return chromadb.HttpClient(host=host, port=port)
+            except Exception as exc:
+                last_exc = exc
+                if attempt >= retries:
+                    break
+                logger.warning(
+                    "[VectorStore] ChromaDB not ready: host=%s port=%s attempt=%d/%d error=%s",
+                    host,
+                    port,
+                    attempt,
+                    retries,
+                    exc,
+                )
+                if delay > 0:
+                    time.sleep(delay)
+        raise RuntimeError(
+            f"Could not connect to ChromaDB at {host}:{port} after {retries} attempts "
+            f"(last_error={type(last_exc).__name__}: {last_exc})"
+        ) from last_exc
 
     def _get_collection(self, workspace_id: str):
         return self._client.get_or_create_collection(
@@ -116,6 +144,8 @@ class VectorStore:
             filename,
             len(chunks),
         )
+        block_counts = Counter(getattr(chunk, "block_type", "") or "text" for chunk in chunks)
+        logger.info("[VectorStore] add_structured_chunks block_types=%s", dict(block_counts))
         collection = self._get_collection(workspace_id)
         for start in range(0, len(chunks), batch_size):
             batch: list[ChunkWithMetadata] = chunks[start : start + batch_size]
@@ -166,10 +196,21 @@ class VectorStore:
                     "page_start": meta.get("page_start", 0),
                     "page_end": meta.get("page_end", 0),
                     "section_level": meta.get("section_level", 0),
+                    "block_id": meta.get("block_id", ""),
+                    "block_type": meta.get("block_type", ""),
+                    "asset_path": meta.get("asset_path", ""),
+                    "caption": meta.get("caption", ""),
+                    "bbox": meta.get("bbox", ""),
+                    "content_kind": meta.get("content_kind", ""),
                     "distance": (results["distances"][0][i] if results.get("distances") else None),
                 }
             )
-        logger.info("[VectorStore] search returned %d results", len(output))
+        result_counts = Counter(item.get("block_type", "") or "text" for item in output)
+        logger.info(
+            "[VectorStore] search returned %d results block_types=%s",
+            len(output),
+            dict(result_counts),
+        )
         return output
 
     def delete_by_doc_id(self, workspace_id: str, doc_id: str):
