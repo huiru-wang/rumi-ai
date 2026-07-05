@@ -1,581 +1,412 @@
 <!DOCTYPE html>
 <html lang="zh-CN">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>桃紫分境 · 封面预览</title>
-    <link rel="preconnect" href="https://fonts.loli.net">
-    <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Outfit:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap">
-    <style>
-        /* ===========================================
-           VIEWPORT FITTING: MANDATORY BASE STYLES
-           Include this ENTIRE file in every presentation.
-           These styles ensure slides fit exactly in the viewport.
-           =========================================== */
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>桃紫分境 · 完整风格预览</title>
+  <link rel="preconnect" href="https://fonts.loli.net" />
+  <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Outfit:wght@400;500;700;800&family=Noto+Sans+SC:wght@400;500;700;900&display=swap" />
+  <style>
+    :root {
+      --bg-primary: #e4dff0;
+      --bg-secondary: #f5e6dc;
+      --text-primary: #1a1a1a;
+      --text-secondary: #5a5a6a;
+      --accent-main: #b8a0d8;
+      --accent-highlight: #f0c8a0;
+      --accent-muted: rgba(180, 160, 210, 0.15);
+      --surface: rgba(255, 255, 255, 0.55);
+      --badge-mint: #c8f0d8;
+      --badge-yellow: #f0f0c8;
+      --badge-pink: #f0d4e0;
+      --slide-padding: clamp(1rem, 4vw, 4rem);
+      --body-size: clamp(0.74rem, 1.2vw, 1.02rem);
+      --small-size: clamp(0.64rem, 0.95vw, 0.82rem);
+      --font: "Outfit", "Noto Sans SC", sans-serif;
+      --bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
+    }
 
-        /* 1. Lock html/body to viewport */
-        html, body {
-            height: 100%;
-            overflow-x: hidden;
-        }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow-x: hidden; }
+    html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font); }
 
-        html {
-            scroll-snap-type: y mandatory;
-            scroll-behavior: smooth;
-        }
+    .slide {
+      position: relative;
+      display: grid;
+      grid-template-columns: 40% 60%;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
+      overflow: hidden;
+      scroll-snap-align: start;
+    }
 
-        /* 2. Each slide = exact viewport height */
-        .slide {
-            width: 100vw;
-            height: 100vh;
-            height: 100dvh; /* Dynamic viewport height for mobile browsers */
-            overflow: hidden; /* CRITICAL: Prevent ANY overflow */
-            scroll-snap-align: start;
-            display: flex;
-            flex-direction: column;
-            position: relative;
-        }
+    .left, .right {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      justify-content: center;
+      max-height: 100%;
+      overflow: hidden;
+      padding: var(--slide-padding);
+    }
+    .left { align-items: flex-start; background: var(--bg-secondary); }
+    .right {
+      background:
+        linear-gradient(var(--accent-muted) 1px, transparent 1px),
+        linear-gradient(90deg, var(--accent-muted) 1px, transparent 1px),
+        var(--bg-primary);
+      background-size: 40px 40px;
+    }
 
-        /* 3. Content container with flex for centering */
-        .slide-content {
-            flex: 1;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            max-height: 100%;
-            overflow: hidden; /* Double-protection against overflow */
-            padding: var(--slide-padding);
-        }
+    .progress {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 60;
+      width: 100%;
+      height: 4px;
+      background: linear-gradient(90deg, var(--accent-highlight), var(--accent-main));
+      transform-origin: left;
+      transform: scaleX(var(--progress, 0));
+      transition: transform 0.35s ease;
+    }
 
-        /* 4. ALL typography uses clamp() for responsive scaling */
-        :root {
-            /* Titles scale from mobile to desktop */
-            --title-size: clamp(1.5rem, 5vw, 4rem);
-            --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
-            --h3-size: clamp(1rem, 2.5vw, 1.75rem);
+    .dots {
+      position: fixed;
+      right: clamp(1rem, 2.6vw, 2.2rem);
+      top: 50%;
+      z-index: 70;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      transform: translateY(-50%);
+    }
+    .dots button {
+      width: 9px;
+      height: 9px;
+      border: 1px solid var(--text-primary);
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    .dots button.active { background: var(--text-primary); }
 
-            /* Body text */
-            --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
-            --small-size: clamp(0.65rem, 1vw, 0.875rem);
+    .kicker {
+      color: var(--text-secondary);
+      font-size: var(--small-size);
+      font-weight: 700;
+      letter-spacing: 0.12em;
+      margin-bottom: clamp(0.65rem, 1.6vh, 1.1rem);
+      text-transform: uppercase;
+    }
+    .hero-title {
+      font-size: clamp(3rem, 7.5vw, 7.2rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.02;
+      max-width: 7ch;
+    }
+    .page-title {
+      font-size: clamp(2rem, 4.4vw, 4.2rem);
+      font-weight: 800;
+      letter-spacing: -0.035em;
+      line-height: 1.05;
+      max-width: 9ch;
+    }
+    .lead {
+      color: var(--text-secondary);
+      font-size: var(--body-size);
+      line-height: 1.55;
+      max-width: 48ch;
+      margin-top: clamp(0.8rem, 2vh, 1.3rem);
+    }
+    .watermark {
+      position: absolute;
+      left: clamp(1rem, 3vw, 3rem);
+      top: clamp(1rem, 4vw, 4rem);
+      color: var(--text-primary);
+      font-size: clamp(6rem, 14vw, 12rem);
+      font-weight: 800;
+      letter-spacing: -0.08em;
+      line-height: 0.8;
+      opacity: 0.05;
+      pointer-events: none;
+    }
+    .badge-row { display: flex; flex-wrap: wrap; gap: 0.55rem; }
+    .badge {
+      border-radius: 999px;
+      color: var(--text-primary);
+      font-size: var(--small-size);
+      font-weight: 700;
+      padding: 0.5rem 0.8rem;
+    }
+    .mint { background: var(--badge-mint); }
+    .yellow { background: var(--badge-yellow); }
+    .pink { background: var(--badge-pink); }
+    .lavender { background: rgba(255, 255, 255, 0.5); }
 
-            /* Spacing scales with viewport */
-            --slide-padding: clamp(1rem, 4vw, 4rem);
-            --content-gap: clamp(0.5rem, 2vw, 2rem);
-            --element-gap: clamp(0.25rem, 1vw, 1rem);
-        }
+    .quote-card {
+      align-self: stretch;
+      border-radius: 24px;
+      background: rgba(255,255,255,0.55);
+      margin-top: clamp(1.5rem, 5vh, 4rem);
+      padding: clamp(1.2rem, 3vw, 2.2rem);
+    }
+    .quote-card strong {
+      display: block;
+      font-size: clamp(2rem, 4.5vw, 4.8rem);
+      font-weight: 800;
+      letter-spacing: -0.04em;
+      line-height: 1.05;
+      margin-bottom: 1rem;
+    }
+    .quote-card p { color: var(--text-secondary); font-size: var(--body-size); line-height: 1.5; }
 
-        /* 5. Cards/containers use viewport-relative max sizes */
-        .card, .container, .content-box {
-            max-width: min(90vw, 1000px);
-            max-height: min(80vh, 700px);
-        }
+    .cards {
+      display: grid;
+      gap: clamp(0.8rem, 1.7vw, 1.2rem);
+      grid-template-columns: repeat(2, 1fr);
+      width: 100%;
+    }
+    .rule-card {
+      min-height: clamp(8.2rem, 22vh, 13rem);
+      border-radius: 18px;
+      background: var(--surface);
+      padding: clamp(0.9rem, 1.8vw, 1.35rem);
+      backdrop-filter: blur(10px);
+    }
+    .rule-card h3 {
+      font-size: clamp(1.1rem, 2vw, 1.5rem);
+      font-weight: 800;
+      line-height: 1.18;
+      margin: 0.8rem 0 0.6rem;
+    }
+    .rule-card code,
+    .list-item code {
+      display: inline-block;
+      border-radius: 10px;
+      background: rgba(255,255,255,0.55);
+      color: var(--text-secondary);
+      font-family: var(--font);
+      font-size: var(--small-size);
+      margin-top: 0.55rem;
+      padding: 0.38rem 0.55rem;
+    }
 
-        /* 6. Lists auto-scale with viewport */
-        .feature-list, .bullet-list {
-            gap: clamp(0.4rem, 1vh, 1rem);
-        }
+    .rule-list {
+      display: grid;
+      gap: clamp(0.65rem, 1.4vh, 1rem);
+      width: 100%;
+    }
+    .list-item {
+      display: grid;
+      align-items: center;
+      grid-template-columns: auto 1fr;
+      gap: 1rem;
+      border-radius: 18px;
+      background: var(--surface);
+      padding: clamp(0.8rem, 1.5vw, 1.15rem);
+    }
+    .icon {
+      display: grid;
+      place-items: center;
+      width: 2.5rem;
+      height: 2.5rem;
+      border-radius: 999px;
+      background: var(--badge-mint);
+      font-weight: 800;
+    }
+    .list-item h3 { font-size: clamp(1rem, 1.8vw, 1.35rem); }
+    .list-item p { color: var(--text-secondary); font-size: var(--body-size); line-height: 1.45; }
 
-        .feature-list li, .bullet-list li {
-            font-size: var(--body-size);
-            line-height: 1.4;
-        }
+    .button {
+      display: inline-flex;
+      width: fit-content;
+      border-radius: 999px;
+      background: rgba(255,255,255,0.78);
+      color: var(--text-primary);
+      font-weight: 800;
+      margin-top: clamp(1rem, 3vh, 2rem);
+      padding: 0.85rem 1.2rem;
+    }
 
-        /* 7. Grids adapt to available space */
-        .grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-            gap: clamp(0.5rem, 1.5vw, 1rem);
-        }
+    .reveal {
+      opacity: 0;
+      transform: translateY(24px) scale(0.98);
+      transition: opacity 0.62s var(--bounce), transform 0.62s var(--bounce);
+    }
+    .slide.visible .reveal { opacity: 1; transform: translateY(0) scale(1); }
+    .reveal:nth-child(1) { transition-delay: 0.06s; }
+    .reveal:nth-child(2) { transition-delay: 0.14s; }
+    .reveal:nth-child(3) { transition-delay: 0.22s; }
+    .reveal:nth-child(4) { transition-delay: 0.3s; }
 
-        /* 8. Images constrained to viewport */
-        img, .image-container {
-            max-width: 100%;
-            max-height: min(50vh, 400px);
-            object-fit: contain;
-        }
-
-        /* ===========================================
-           RESPONSIVE BREAKPOINTS
-           Aggressive scaling for smaller viewports
-           =========================================== */
-
-        /* Short viewports (< 700px height) */
-        @media (max-height: 700px) {
-            :root {
-                --slide-padding: clamp(0.75rem, 3vw, 2rem);
-                --content-gap: clamp(0.4rem, 1.5vw, 1rem);
-                --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
-                --h2-size: clamp(1rem, 3vw, 1.75rem);
-            }
-        }
-
-        /* Very short viewports (< 600px height) */
-        @media (max-height: 600px) {
-            :root {
-                --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
-                --content-gap: clamp(0.3rem, 1vw, 0.75rem);
-                --title-size: clamp(1.1rem, 4vw, 2rem);
-                --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
-            }
-
-            /* Hide non-essential elements */
-            .nav-dots, .decorative {
-                display: none;
-            }
-        }
-
-        /* Extremely short (landscape phones, < 500px height) */
-        @media (max-height: 500px) {
-            :root {
-                --slide-padding: clamp(0.4rem, 2vw, 1rem);
-                --title-size: clamp(1rem, 3.5vw, 1.5rem);
-                --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
-                --body-size: clamp(0.65rem, 1vw, 0.85rem);
-            }
-        }
-
-        /* Narrow viewports (< 600px width) */
-        @media (max-width: 600px) {
-            :root {
-                --title-size: clamp(1.25rem, 7vw, 2.5rem);
-            }
-
-            /* Stack grids vertically */
-            .grid {
-                grid-template-columns: 1fr;
-            }
-        }
-
-        /* ===========================================
-           REDUCED MOTION
-           Respect user preferences
-           =========================================== */
-        @media (prefers-reduced-motion: reduce) {
-            *, *::before, *::after {
-                animation-duration: 0.01ms !important;
-                transition-duration: 0.2s !important;
-            }
-
-            html {
-                scroll-behavior: auto;
-            }
-        }
-
-        /* ===========================================
-           THEME: PEACH-LAVENDER SPLIT
-           Color system and typography from the style template
-           =========================================== */
-        :root {
-            --bg-primary: #e4dff0;
-            --bg-secondary: #f5e6dc;
-            --text-primary: #1a1a1a;
-            --text-secondary: #5a5a6a;
-            --accent-main: #b8a0d8;
-            --accent-highlight: #f0c8a0;
-            --accent-muted: rgba(180, 160, 210, 0.15);
-            --surface: rgba(255, 255, 255, 0.55);
-            --badge-mint: #c8f0d8;
-            --badge-yellow: #f0f0c8;
-            --badge-pink: #f0d4e0;
-
-            /* Typography */
-            --font-display: "Outfit", "Noto Sans SC", sans-serif;
-            --font-body: "Outfit", "Noto Sans SC", sans-serif;
-
-            /* Animation */
-            --ease-bounce: cubic-bezier(0.34, 1.56, 0.64, 1);
-            --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-            --duration-normal: 0.6s;
-        }
-
-        /* ===========================================
-           BASE RESET
-           =========================================== */
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
-
-        body {
-            font-family: var(--font-body);
-            color: var(--text-primary);
-            background: var(--bg-primary);
-            -webkit-font-smoothing: antialiased;
-            -moz-osx-font-smoothing: grayscale;
-        }
-
-        /* ===========================================
-           PROGRESS BAR
-           Top fixed gradient bar
-           =========================================== */
-        .progress-bar {
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 4px;
-            background: linear-gradient(90deg, var(--accent-highlight), var(--accent-main));
-            z-index: 1000;
-            transition: width 0.3s var(--ease-out-expo);
-        }
-
-        /* ===========================================
-           NAVIGATION DOTS
-           Right side vertical indicators
-           =========================================== */
-        .nav-dots {
-            position: fixed;
-            right: clamp(0.75rem, 2vw, 1.5rem);
-            top: 50%;
-            transform: translateY(-50%);
-            display: flex;
-            flex-direction: column;
-            gap: clamp(0.5rem, 1vh, 0.75rem);
-            z-index: 1000;
-        }
-
-        .nav-dots button {
-            width: clamp(8px, 1vw, 12px);
-            height: clamp(8px, 1vw, 12px);
-            border-radius: 50%;
-            border: 2px solid var(--accent-main);
-            background: transparent;
-            cursor: pointer;
-            transition: all 0.3s var(--ease-out-expo);
-            padding: 0;
-        }
-
-        .nav-dots button.active {
-            background: var(--accent-main);
-            transform: scale(1.3);
-        }
-
-        /* ===========================================
-           SPLIT LAYOUT
-           Left peach panel + right lavender panel
-           =========================================== */
-        .slide {
-            display: grid;
-            grid-template-columns: 45% 55%;
-        }
-
-        .panel-left {
-            background: var(--bg-secondary);
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: flex-end;
-            padding: var(--slide-padding);
-            padding-bottom: clamp(2rem, 6vh, 4rem);
-        }
-
-        .panel-right {
-            background: var(--bg-primary);
-            position: relative;
-            overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: center;
-            padding: var(--slide-padding);
-        }
-
-        .panel-right::before {
-            content: "";
-            position: absolute;
-            inset: 0;
-            background-image:
-                linear-gradient(var(--accent-muted) 1px, transparent 1px),
-                linear-gradient(90deg, var(--accent-muted) 1px, transparent 1px);
-            background-size: 40px 40px;
-            opacity: 0.5;
-            pointer-events: none;
-        }
-
-        /* ===========================================
-           TYPOGRAPHY
-           =========================================== */
-        .section-label {
-            font-family: "Outfit", sans-serif;
-            font-weight: 700;
-            font-size: clamp(0.65rem, 1vw, 0.8rem);
-            letter-spacing: 0.15em;
-            text-transform: uppercase;
-            color: var(--text-secondary);
-            margin-bottom: var(--element-gap);
-        }
-
-        .slide-title {
-            font-family: var(--font-display);
-            font-weight: 800;
-            font-size: clamp(2rem, 5.5vw, 5rem);
-            line-height: 1.05;
-            color: var(--text-primary);
-            margin-bottom: var(--element-gap);
-        }
-
-        .slide-subtitle {
-            font-family: "Outfit", sans-serif;
-            font-weight: 500;
-            font-size: clamp(0.875rem, 1.5vw, 1.25rem);
-            line-height: 1.5;
-            color: var(--text-secondary);
-        }
-
-        .cover-tagline {
-            font-family: "Outfit", sans-serif;
-            font-weight: 800;
-            font-size: clamp(1.25rem, 2.5vw, 2rem);
-            color: var(--text-primary);
-            line-height: 1.3;
-            margin-top: var(--content-gap);
-        }
-
-        .cover-slogan {
-            font-family: "Outfit", sans-serif;
-            font-weight: 700;
-            font-size: clamp(1.5rem, 4vw, 3rem);
-            line-height: 1.15;
-            color: var(--text-primary);
-            margin-bottom: var(--content-gap);
-        }
-
-        .cover-modules {
-            display: flex;
-            flex-wrap: wrap;
-            gap: clamp(0.5rem, 1vw, 0.75rem);
-            margin-top: var(--content-gap);
-        }
-
-        /* ===========================================
-           BADGES
-           Candy-colored pill labels
-           =========================================== */
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 0.35em;
-            padding: clamp(0.25rem, 0.5vw, 0.4rem) clamp(0.6rem, 1vw, 0.9rem);
-            border-radius: 999px;
-            font-family: "Outfit", sans-serif;
-            font-weight: 700;
-            font-size: clamp(0.65rem, 1vw, 0.8rem);
-            line-height: 1;
-            white-space: nowrap;
-        }
-
-        .badge-mint {
-            background: var(--badge-mint);
-            color: #2a5a3a;
-        }
-
-        .badge-yellow {
-            background: var(--badge-yellow);
-            color: #5a5a20;
-        }
-
-        .badge-pink {
-            background: var(--badge-pink);
-            color: #8a4058;
-        }
-
-        /* ===========================================
-           ANIMATIONS
-           Light bounce entrance
-           =========================================== */
-        .reveal {
-            opacity: 0;
-            transform: translateY(20px);
-            transition:
-                opacity var(--duration-normal) var(--ease-out-expo),
-                transform var(--duration-normal) var(--ease-bounce);
-        }
-
-        .slide.visible .reveal {
-            opacity: 1;
-            transform: translateY(0);
-        }
-
-        .reveal:nth-child(1) { transition-delay: 0.08s; }
-        .reveal:nth-child(2) { transition-delay: 0.16s; }
-        .reveal:nth-child(3) { transition-delay: 0.24s; }
-        .reveal:nth-child(4) { transition-delay: 0.32s; }
-        .reveal:nth-child(5) { transition-delay: 0.4s; }
-        .reveal:nth-child(6) { transition-delay: 0.48s; }
-
-        /* ===========================================
-           RESPONSIVE ADJUSTMENTS FOR SPLIT LAYOUT
-           =========================================== */
-        @media (max-width: 768px) {
-            .slide {
-                grid-template-columns: 1fr;
-                grid-template-rows: auto 1fr;
-            }
-
-            .panel-left {
-                justify-content: center;
-                padding: clamp(1rem, 3vw, 1.5rem);
-                min-height: auto;
-                padding-bottom: clamp(1rem, 3vw, 1.5rem);
-            }
-
-            .panel-right {
-                padding: clamp(1rem, 3vw, 1.5rem);
-            }
-
-            .cover-tagline {
-                margin-top: var(--element-gap);
-            }
-        }
-    </style>
+    @media (max-width: 820px) {
+      .slide { grid-template-columns: 1fr; }
+      .left { min-height: 38vh; }
+      .right { min-height: 62vh; }
+      .cards { grid-template-columns: 1fr; }
+      .rule-card:nth-child(n+4), .list-item:nth-child(n+5) { display: none; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition-duration: 0.01ms !important; }
+      html { scroll-behavior: auto; }
+    }
+  </style>
 </head>
-<body>
-    <!-- Progress bar -->
-    <div class="progress-bar" id="progressBar"></div>
+<body class="readonly-preview" data-preview-mode="readonly">
+  <div class="progress" id="progressBar" aria-hidden="true"></div>
+  <nav class="dots" id="navDots" aria-label="幻灯片导航"></nav>
 
-    <!-- Navigation dots -->
-    <nav class="nav-dots" id="navDots" aria-label="幻灯片导航"></nav>
+  <section class="slide" aria-label="封面页 · 桃紫分屏封面">
+    <div class="left">
+      <p class="kicker reveal">cover.pastel_split_hero</p>
+      <h1 class="hero-title reveal">桃紫分境</h1>
+      <p class="lead reveal">蜜桃色标题区与薰衣草内容区并置，让知识分享更轻盈、更容易进入。</p>
+    </div>
+    <div class="right">
+      <div class="badge-row reveal"><span class="badge mint">推荐</span><span class="badge yellow">参考</span><span class="badge pink">关键</span><span class="badge lavender">知识分享</span></div>
+      <div class="quote-card reveal"><strong>把规则讲得像翻开一本手册。</strong><p>右侧承载标签、金句和模块说明，形成轻松但清晰的开场。</p></div>
+    </div>
+  </section>
 
-    <!-- Inline editing controls -->
-    <!-- ===========================================
-         COVER SLIDE: TEMPLATE PREVIEW
-         =========================================== -->
-    <section class="slide slide-cover">
-        <div class="panel-left">
-            <div class="reveal">
-                <span class="badge badge-mint">模版预览</span>
-            </div>
-            <h1 class="slide-title reveal">桃紫分境</h1>
-            <p class="slide-subtitle reveal">Peach-Lavender Split · 柔和明快的 Pastel 分屏风格</p>
-            <div class="cover-tagline reveal">像翻开一本装订精美的知识手账</div>
-        </div>
-        <div class="panel-right">
-            <div class="cover-slogan reveal">蜜桃色 × 薰衣草紫<br>糖果标签 × 半透明卡片</div>
-            <p class="slide-subtitle reveal">本风格以左右 pastel 分屏为识别核心，左侧蜜桃色承载标题，右侧薰衣草紫叠加淡网格纹理，适合轻松宣讲、知识分享与轻编辑感演示。</p>
-            <div class="cover-modules reveal">
-                <span class="badge badge-yellow">左右分屏</span>
-                <span class="badge badge-pink">淡紫网格</span>
-                <span class="badge badge-mint">糖果标签</span>
-                <span class="badge badge-yellow">轻弹动画</span>
-                <span class="badge badge-pink">半透明卡片</span>
-            </div>
-        </div>
-    </section>
+  <section class="slide" aria-label="内容页 · 规则卡片型目录降级">
+    <div class="left">
+      <span class="watermark">00</span>
+      <p class="kicker reveal">content.rule_cards</p>
+      <h2 class="page-title reveal">目录以卡片入口呈现</h2>
+      <p class="lead reveal">本风格没有原生目录页；必要时用规则卡片承载结构入口。</p>
+    </div>
+    <div class="right">
+      <div class="cards">
+        <article class="rule-card reveal"><span class="badge mint">01</span><h3>封面页</h3><p>分屏标题与右侧模块标签。</p><code>cover.pastel_split_hero</code></article>
+        <article class="rule-card reveal"><span class="badge yellow">02</span><h3>规则卡片</h3><p>2x2 或 2x3 展示知识点。</p><code>content.rule_cards</code></article>
+        <article class="rule-card reveal"><span class="badge pink">03</span><h3>规则列表</h3><p>纵向条目适合操作建议。</p><code>content.rule_list</code></article>
+        <article class="rule-card reveal"><span class="badge lavender">04</span><h3>行动页</h3><p>分屏收束与行动按钮。</p><code>closing.split_cta</code></article>
+      </div>
+    </div>
+  </section>
 
-    <script>
-        /* ===========================================
-           SLIDE PRESENTATION CONTROLLER
-           Keyboard, touch, wheel navigation
-           =========================================== */
-        class SlidePresentation {
-            constructor() {
-                this.slides = document.querySelectorAll('.slide');
-                this.totalSlides = this.slides.length;
-                this.currentIndex = 0;
-                this.isScrolling = false;
-                this.progressBar = document.getElementById('progressBar');
+  <section class="slide" aria-label="内容页 · 规则卡片型">
+    <div class="left">
+      <span class="watermark">01</span>
+      <p class="kicker reveal">content.rule_cards</p>
+      <h2 class="page-title reveal">规则被拆成可扫读卡片</h2>
+      <p class="lead reveal">每张卡片包含标签、规则和示例，适合知识点集合。</p>
+    </div>
+    <div class="right">
+      <div class="cards">
+        <article class="rule-card reveal"><span class="badge pink">强制</span><h3>一页只讲一个重点</h3><p>避免在单张卡片里混入多条规则。</p><code>one card = one rule</code></article>
+        <article class="rule-card reveal"><span class="badge mint">推荐</span><h3>标签表达角色</h3><p>薄荷、柠黄、柔粉承担不同语义。</p><code>badge as role</code></article>
+        <article class="rule-card reveal"><span class="badge yellow">参考</span><h3>示例要短</h3><p>代码或例子只保留能说明规则的一行。</p><code>short example</code></article>
+        <article class="rule-card reveal"><span class="badge mint">推荐</span><h3>保持 2x2 呼吸</h3><p>内容较多时拆页，不压缩字号。</p><code>split if dense</code></article>
+      </div>
+    </div>
+  </section>
 
-                this.setupObserver();
-                this.setupKeyboardNav();
-                this.setupTouchNav();
-                this.setupWheelNav();
-                this.setupNavDots();
-                this.updateUI();
-            }
+  <section class="slide" aria-label="内容页 · 规则列表型">
+    <div class="left">
+      <span class="watermark">02</span>
+      <p class="kicker reveal">content.rule_list</p>
+      <h2 class="page-title reveal">操作建议使用纵向列表</h2>
+      <p class="lead reveal">当内容有明显顺序或注意事项时，列表比卡片更自然。</p>
+    </div>
+    <div class="right">
+      <div class="rule-list">
+        <article class="list-item reveal"><span class="icon">1</span><div><h3>先定位场景</h3><p>说明该规则适用于哪类用户任务。</p><code>scenario first</code></div></article>
+        <article class="list-item reveal"><span class="icon">2</span><div><h3>再给出做法</h3><p>每项只保留一个动作，减少歧义。</p><code>one action</code></div></article>
+        <article class="list-item reveal"><span class="icon">3</span><div><h3>补充短例子</h3><p>例子放在末尾，作为扫读锚点。</p><code>tiny sample</code></div></article>
+        <article class="list-item reveal"><span class="icon">4</span><div><h3>最后收束</h3><p>用按钮或标签把用户带到下一步。</p><code>clear next</code></div></article>
+      </div>
+    </div>
+  </section>
 
-            setupObserver() {
-                const observer = new IntersectionObserver((entries) => {
-                    entries.forEach(entry => {
-                        if (entry.isIntersecting) {
-                            entry.target.classList.add('visible');
-                            this.currentIndex = Array.from(this.slides).indexOf(entry.target);
-                            this.updateUI();
-                        }
-                    });
-                }, { threshold: 0.3 });
-                this.slides.forEach(s => observer.observe(s));
-            }
+  <section class="slide" aria-label="封底页 · 桃紫分屏行动页">
+    <div class="left" style="align-items:flex-end;text-align:right;">
+      <p class="kicker reveal">closing.split_cta</p>
+      <h2 class="page-title reveal">轻一点，也清楚一点</h2>
+    </div>
+    <div class="right">
+      <p class="lead reveal">封底保持左右分屏，右侧用说明、标签组和行动按钮完成收束。</p>
+      <div class="badge-row reveal" style="margin-top:1.4rem;"><span class="badge mint">复盘</span><span class="badge yellow">行动</span><span class="badge pink">下一步</span></div>
+      <span class="button reveal">开始整理规则</span>
+    </div>
+  </section>
 
-            setupKeyboardNav() {
-                document.addEventListener('keydown', (e) => {
-                    if (e.target.isContentEditable) return;
-
-                    if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
-                        e.preventDefault();
-                        this.goTo(this.currentIndex + 1);
-                    } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
-                        e.preventDefault();
-                        this.goTo(this.currentIndex - 1);
-                    } else if (e.key === 'Home') {
-                        e.preventDefault();
-                        this.goTo(0);
-                    } else if (e.key === 'End') {
-                        e.preventDefault();
-                        this.goTo(this.totalSlides - 1);
-                    }
-                });
-            }
-
-            setupTouchNav() {
-                let startY = 0;
-                document.addEventListener('touchstart', (e) => {
-                    if (e.target.isContentEditable) return;
-                    startY = e.touches[0].clientY;
-                }, { passive: true });
-                document.addEventListener('touchend', (e) => {
-                    if (e.target.isContentEditable) return;
-                    const diff = startY - e.changedTouches[0].clientY;
-                    if (Math.abs(diff) > 50) {
-                        this.goTo(this.currentIndex + (diff > 0 ? 1 : -1));
-                    }
-                }, { passive: true });
-            }
-
-            setupWheelNav() {
-                document.addEventListener('wheel', (e) => {
-                    if (this.isScrolling) return;
-                    this.isScrolling = true;
-                    setTimeout(() => { this.isScrolling = false; }, 800);
-                    if (e.deltaY > 0) this.goTo(this.currentIndex + 1);
-                    else if (e.deltaY < 0) this.goTo(this.currentIndex - 1);
-                }, { passive: true });
-            }
-
-            goTo(index) {
-                if (index < 0 || index >= this.totalSlides) return;
-                this.slides[index].scrollIntoView({ behavior: 'smooth' });
-            }
-
-            updateUI() {
-                if (this.progressBar) {
-                    this.progressBar.style.width = ((this.currentIndex + 1) / this.totalSlides * 100) + '%';
-                }
-                if (this.dots) {
-                    this.dots.forEach((dot, i) => {
-                        dot.classList.toggle('active', i === this.currentIndex);
-                    });
-                }
-            }
-
-            setupNavDots() {
-                const container = document.getElementById('navDots');
-                if (!container) return;
-                container.innerHTML = '';
-                for (let i = 0; i < this.totalSlides; i++) {
-                    const btn = document.createElement('button');
-                    btn.setAttribute('aria-label', `幻灯片 ${i + 1}`);
-                    btn.addEventListener('click', () => this.goTo(i));
-                    container.appendChild(btn);
-                }
-                this.dots = container.querySelectorAll('button');
-            }
-        }
-
-
-        /* ===========================================
-           INITIALIZE
-           =========================================== */
-        const presentation = new SlidePresentation();    </script>
+  <script>
+    class PreviewDeck {
+      constructor() {
+        this.slides = Array.from(document.querySelectorAll(".slide"));
+        this.index = 0;
+        this.progress = document.getElementById("progressBar");
+        this.dots = document.getElementById("navDots");
+        this.locked = false;
+        this.enforceReadOnly();
+        this.setupDots();
+        this.setupObserver();
+        this.setupInput();
+        this.update();
+        this.slides[0]?.classList.add("visible");
+      }
+      enforceReadOnly() {
+        document.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
+        document.querySelectorAll("input, textarea, select").forEach((el) => {
+          el.setAttribute("disabled", "disabled");
+          el.setAttribute("aria-disabled", "true");
+        });
+      }
+      setupDots() {
+        this.slides.forEach((_, i) => {
+          const dot = document.createElement("button");
+          dot.type = "button";
+          dot.setAttribute("aria-label", `跳转到第 ${i + 1} 页`);
+          dot.addEventListener("click", () => this.go(i));
+          this.dots.appendChild(dot);
+        });
+      }
+      setupObserver() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add("visible");
+            this.index = this.slides.indexOf(entry.target);
+            this.update();
+          });
+        }, { threshold: 0.45 });
+        this.slides.forEach((slide) => observer.observe(slide));
+      }
+      setupInput() {
+        document.addEventListener("keydown", (event) => {
+          if (["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.go(this.index + 1); }
+          if (["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.go(this.index - 1); }
+        });
+        document.addEventListener("wheel", (event) => {
+          if (this.locked || Math.abs(event.deltaY) < 28) return;
+          event.preventDefault();
+          this.locked = true;
+          this.go(this.index + (event.deltaY > 0 ? 1 : -1));
+          setTimeout(() => { this.locked = false; }, 650);
+        }, { passive: false });
+      }
+      go(next) {
+        const index = Math.max(0, Math.min(next, this.slides.length - 1));
+        const target = this.slides[index];
+        if (!target) return;
+        target.classList.remove("visible");
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        this.index = index;
+        this.update();
+        requestAnimationFrame(() => requestAnimationFrame(() => target.classList.add("visible")));
+      }
+      update() {
+        this.progress.style.setProperty("--progress", String((this.index + 1) / this.slides.length));
+        Array.from(this.dots.children).forEach((dot, i) => dot.classList.toggle("active", i === this.index));
+      }
+    }
+    document.addEventListener("DOMContentLoaded", () => { window.peachLavenderPreview = new PreviewDeck(); });
+  </script>
 </body>
 </html>

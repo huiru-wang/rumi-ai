@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle } from "lucide-react";
+import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle, ArrowLeft } from "lucide-react";
 import { getStyleExtractionPreviewUrl, getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
 
 interface StyleExtractionDialogProps {
@@ -95,6 +95,8 @@ export function StyleExtractionDialog({
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
+  const [previewOpen, setPreviewOpen] = useState(false);
+  const [previewLoading, setPreviewLoading] = useState(false);
 
   // Poll task
   useEffect(() => {
@@ -142,11 +144,16 @@ export function StyleExtractionDialog({
 
   useEffect(() => {
     const handleKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") onClose();
+      if (e.key !== "Escape") return;
+      if (previewOpen) {
+        setPreviewOpen(false);
+      } else {
+        onClose();
+      }
     };
     document.addEventListener("keydown", handleKey);
     return () => document.removeEventListener("keydown", handleKey);
-  }, [onClose]);
+  }, [onClose, previewOpen]);
 
   const handleSave = useCallback(async () => {
     setSaving(true);
@@ -177,26 +184,57 @@ export function StyleExtractionDialog({
   const isFailed = task?.status === "failed" || task?.status === "cancelled";
   const previewUrl = isCompleted ? getStyleExtractionPreviewUrl(taskId) : null;
 
+  const openPreview = useCallback(() => {
+    if (!previewUrl) return;
+    setPreviewLoading(true);
+    setPreviewOpen(true);
+  }, [previewUrl]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
       <div
         ref={dialogRef}
-        className="mx-4 flex max-h-[85vh] w-full max-w-lg flex-col rounded-2xl border border-border bg-background shadow-2xl"
+        className={`mx-4 flex max-h-[85vh] w-full flex-col rounded-2xl border border-border bg-background shadow-2xl ${
+          previewOpen ? "h-[85vh] max-w-5xl" : "max-w-lg"
+        }`}
       >
         {/* Header */}
         <div className="flex shrink-0 flex-col border-b border-border px-5 py-3.5">
           <div className="flex items-center justify-between">
-            <h3 className="text-sm font-semibold text-foreground">
-              视觉风格提取
-            </h3>
+            {previewOpen ? (
+              <div className="flex items-center gap-3">
+                <button
+                  onClick={() => setPreviewOpen(false)}
+                  className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs text-muted-foreground transition-colors hover:text-foreground"
+                >
+                  <ArrowLeft size={14} />
+                  返回
+                </button>
+                <div className="h-4 w-px bg-border" />
+                <div>
+                  <h3 className="text-sm font-semibold text-foreground">
+                    {styleName || "风格预览"}
+                  </h3>
+                  {shortDescription && (
+                    <p className="mt-0.5 max-w-xl truncate text-[11px] text-muted-foreground">
+                      {shortDescription}
+                    </p>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <h3 className="text-sm font-semibold text-foreground">
+                视觉风格提取
+              </h3>
+            )}
             <button
-              onClick={onClose}
+              onClick={previewOpen ? () => setPreviewOpen(false) : onClose}
               className="rounded-md p-1 text-muted-foreground transition-colors hover:text-foreground"
             >
               <X size={16} />
             </button>
           </div>
-          {!isCompleted && !isFailed && (
+          {!previewOpen && !isCompleted && !isFailed && (
             <p className="mt-1.5 text-[11px] text-muted-foreground">
               预计需要 5 分钟完成，可关闭窗口。任务已在「产出」中，随时可查看进度。
             </p>
@@ -204,6 +242,24 @@ export function StyleExtractionDialog({
         </div>
 
         {/* Content */}
+        {previewOpen && previewUrl ? (
+          <div className="relative flex flex-1 items-center justify-center overflow-hidden bg-muted/30 p-6">
+            {previewLoading && (
+              <div className="absolute inset-0 z-10 flex items-center justify-center bg-background/80">
+                <Loader2 size={28} className="animate-spin text-muted-foreground" />
+              </div>
+            )}
+            <div className="relative aspect-video w-full max-w-[min(100%,calc((85vh-150px)*16/9))] overflow-hidden rounded-lg border border-border bg-background shadow-lg">
+              <iframe
+                src={previewUrl}
+                title={`${styleName || "风格"} 全屏预览`}
+                sandbox="allow-scripts allow-same-origin"
+                className={`h-full w-full border-0 transition-opacity duration-300 ${previewLoading ? "opacity-0" : "opacity-100"}`}
+                onLoad={() => setPreviewLoading(false)}
+              />
+            </div>
+          </div>
+        ) : (
         <div className="min-h-0 flex-1 overflow-y-auto px-5 py-4">
           <div className="flex flex-col gap-2.5">
             {STEPS.map((step, i) => (
@@ -249,19 +305,35 @@ export function StyleExtractionDialog({
                 {/* 生成预览页面完成后，内联显示预览 iframe */}
                 {step.key === "generating_preview" && stepStatuses[i] === "done" && previewUrl && (
                   <div className="ml-6 mt-1.5 overflow-hidden rounded-xl border border-border">
-                    <iframe
-                      src={previewUrl}
-                      title="风格预览"
-                      className="h-64 w-full border-0"
-                    />
+                    <div className="flex items-center justify-between border-b border-border bg-muted/20 px-3 py-2">
+                      <span className="text-[11px] text-muted-foreground">
+                        HTML 预览
+                      </span>
+                      <button
+                        onClick={openPreview}
+                        className="rounded-md bg-accent/15 px-2.5 py-1 text-[10px] font-medium text-accent transition-colors hover:bg-accent/25"
+                      >
+                        预览
+                      </button>
+                    </div>
+                    <div className="h-64">
+                      <iframe
+                        src={previewUrl}
+                        title="风格预览"
+                        className="pointer-events-none h-full w-full border-0"
+                        tabIndex={-1}
+                      />
+                    </div>
                   </div>
                 )}
               </div>
             ))}
           </div>
         </div>
+        )}
 
         {/* Footer */}
+        {!previewOpen && (
         <div className="flex shrink-0 items-center justify-end border-t border-border px-5 py-3">
           {saveError && (
             <p className="mr-auto text-[10px] text-red-400">{saveError}</p>
@@ -290,6 +362,7 @@ export function StyleExtractionDialog({
             </button>
           )}
         </div>
+        )}
       </div>
     </div>
   );

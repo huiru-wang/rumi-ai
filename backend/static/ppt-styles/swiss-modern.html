@@ -3,17 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>瑞士国际风 · 封面页模版预览</title>
-
-  <!-- Fonts from China-accessible Google Fonts mirror -->
+  <title>瑞士国际风 · 完整风格预览</title>
   <link rel="preconnect" href="https://fonts.loli.net" />
-  <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Noto+Sans+SC:wght@300;400;500;700;900&family=Inter:wght@200;300;400;500;600;800&family=JetBrains+Mono:wght@400;500;700&display=swap" />
-
+  <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Inter:wght@200;300;400;500;700;800&family=JetBrains+Mono:wght@500;600&family=Noto+Sans+SC:wght@300;400;500;700;900&display=swap" />
   <style>
-    /* ===========================================
-       SWISS-MODERN THEME VARIABLES
-       严格遵循 swiss-modern.md 色彩与字体规范
-       =========================================== */
     :root {
       --bg-primary: #fafaf8;
       --bg-secondary: #f0f0ee;
@@ -23,379 +16,544 @@
       --accent-highlight: #FF8F5C;
       --accent-muted: rgba(255, 107, 53, 0.18);
       --surface: #ffffff;
-
-      --font-display: "Noto Sans SC", "Inter", sans-serif;
-      --font-body: "Noto Sans SC", "Inter", sans-serif;
-      --font-mono: "JetBrains Mono", monospace;
-
-      --title-size: clamp(2rem, 6.5vw, 5rem);
-      --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
-      --h3-size: clamp(1rem, 2.5vw, 1.5rem);
-      --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
-      --small-size: clamp(0.65rem, 1vw, 0.875rem);
-      --mega-size: clamp(3rem, 10vw, 8rem);
-
-      --slide-padding: clamp(1.5rem, 5vw, 4rem);
-      --content-gap: clamp(1rem, 2.5vw, 2rem);
-      --element-gap: clamp(0.5rem, 1.2vw, 1rem);
-
-      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-      --duration-normal: 0.7s;
+      --slide-padding: clamp(1rem, 5vw, 5rem);
+      --body-size: clamp(0.74rem, 1.15vw, 1rem);
+      --small-size: clamp(0.62rem, 0.9vw, 0.78rem);
+      --font: "Inter", "Noto Sans SC", sans-serif;
+      --mono: "JetBrains Mono", monospace;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* ===========================================
-       VIEWPORT FITTING: MANDATORY BASE STYLES
-       完整包含 viewport-base.css 规则
-       =========================================== */
-    * { margin: 0; padding: 0; box-sizing: border-box; }
-
-    html, body {
-      height: 100%;
-      overflow-x: hidden;
-      font-family: var(--font-body);
-      background: var(--accent-main);
-      color: #fff;
-    }
-
-    html {
-      scroll-snap-type: y mandatory;
-      scroll-behavior: smooth;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow-x: hidden; }
+    html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+    body { background: var(--bg-primary); color: var(--text-primary); font-family: var(--font); }
 
     .slide {
+      position: relative;
+      display: flex;
+      flex-direction: column;
       width: 100vw;
       height: 100vh;
       height: 100dvh;
       overflow: hidden;
       scroll-snap-align: start;
-      display: flex;
-      flex-direction: column;
-      position: relative;
+      background: var(--bg-primary);
     }
+    .slide.dark { background: var(--text-primary); color: var(--surface); }
+    .slide.orange { background: var(--accent-main); color: var(--surface); }
 
-    .slide-content {
-      flex: 1;
+    .grid-bg {
+      position: absolute;
+      inset: 0;
+      background:
+        linear-gradient(rgba(10,10,10,0.06) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(10,10,10,0.06) 1px, transparent 1px);
+      background-size: 8.333% 8.333%;
+      pointer-events: none;
+    }
+    .dark .grid-bg { background-image: linear-gradient(rgba(255,255,255,0.08) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.08) 1px, transparent 1px); }
+
+    .header, .footer {
+      position: absolute;
+      left: var(--slide-padding);
+      right: var(--slide-padding);
+      z-index: 5;
       display: flex;
+      justify-content: space-between;
+      gap: 1rem;
+      color: currentColor;
+      font-family: var(--mono);
+      font-size: var(--small-size);
+      font-weight: 600;
+      letter-spacing: 0.12em;
+      opacity: 0.72;
+      text-transform: uppercase;
+    }
+    .header { top: var(--slide-padding); }
+    .footer { bottom: var(--slide-padding); }
+
+    .content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex: 1;
       flex-direction: column;
       justify-content: center;
       max-height: 100%;
       overflow: hidden;
-      padding: var(--slide-padding);
+      padding: calc(var(--slide-padding) * 1.45) var(--slide-padding);
     }
 
-    .card, .container, .content-box {
-      max-width: min(90vw, 1000px);
-      max-height: min(80vh, 700px);
+    .kicker {
+      color: currentColor;
+      font-family: var(--mono);
+      font-size: var(--small-size);
+      font-weight: 600;
+      letter-spacing: 0.16em;
+      margin-bottom: clamp(0.6rem, 1.4vh, 1rem);
+      opacity: 0.72;
+      text-transform: uppercase;
+    }
+    .title {
+      font-size: clamp(2.4rem, 8vw, 8rem);
+      font-weight: 200;
+      letter-spacing: -0.07em;
+      line-height: 0.95;
+      max-width: 10ch;
+    }
+    .page-title {
+      font-size: clamp(2rem, 5.8vw, 5.8rem);
+      font-weight: 250;
+      letter-spacing: -0.06em;
+      line-height: 0.95;
+      max-width: 12ch;
+    }
+    .lead {
+      color: currentColor;
+      font-size: var(--body-size);
+      line-height: 1.55;
+      max-width: 58ch;
+      opacity: 0.68;
+      margin-top: clamp(0.8rem, 2vh, 1.3rem);
     }
 
-    img, .image-container {
-      max-width: 100%;
-      max-height: min(50vh, 400px);
-      object-fit: contain;
-    }
-
-    @media (max-height: 700px) {
-      :root {
-        --slide-padding: clamp(0.75rem, 3vw, 2rem);
-        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
-        --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
-        --h2-size: clamp(1rem, 3vw, 1.75rem);
-      }
-    }
-
-    @media (max-height: 600px) {
-      :root {
-        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
-        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
-        --title-size: clamp(1.1rem, 4vw, 2rem);
-        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
-      }
-      .nav-dots, .decorative { display: none; }
-    }
-
-    @media (max-height: 500px) {
-      :root {
-        --slide-padding: clamp(0.4rem, 2vw, 1rem);
-        --title-size: clamp(1rem, 3.5vw, 1.5rem);
-        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
-        --body-size: clamp(0.65rem, 1vw, 0.85rem);
-      }
-    }
-
-    @media (max-width: 600px) {
-      :root { --title-size: clamp(1.25rem, 7vw, 2.5rem); }
-    }
-
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.2s !important;
-      }
-      html { scroll-behavior: auto; }
-    }
-
-    /* ===========================================
-       GLOBAL REVEAL ANIMATIONS
-       页面进入时触发，支持交错延迟
-       =========================================== */
-    .reveal {
-      opacity: 0;
-      transform: translateY(30px);
-      transition:
-        opacity var(--duration-normal) var(--ease-out-expo),
-        transform var(--duration-normal) var(--ease-out-expo);
-    }
-    .slide.visible .reveal {
-      opacity: 1;
-      transform: translateY(0);
-    }
-    .reveal:nth-child(1) { transition-delay: 0.08s; }
-    .reveal:nth-child(2) { transition-delay: 0.16s; }
-    .reveal:nth-child(3) { transition-delay: 0.24s; }
-    .reveal:nth-child(4) { transition-delay: 0.32s; }
-    .reveal:nth-child(5) { transition-delay: 0.40s; }
-
-    .reveal-scale {
-      opacity: 0;
-      transform: scale(0.9);
-      transition:
-        opacity var(--duration-normal) var(--ease-out-expo),
-        transform var(--duration-normal) var(--ease-out-expo);
-    }
-    .slide.visible .reveal-scale { opacity: 1; transform: scale(1); }
-
-    /* ===========================================
-       PROGRESS BAR
-       =========================================== */
-    .progress-bar {
-      position: fixed;
-      top: 0;
-      left: 0;
-      height: 3px;
-      background: #fff;
-      width: 100%;
-      z-index: 9999;
-      transition: width 0.3s ease;
-    }
-
-    /* ===========================================
-       ASCII BREATHING FIELD
-       封面标志性元素：低透明度字符呼吸场
-       =========================================== */
-    .ascii-field {
+    .ascii {
       position: absolute;
       inset: 0;
+      color: rgba(255,255,255,0.16);
+      font-family: var(--mono);
+      font-size: clamp(0.7rem, 1vw, 1rem);
+      line-height: 1.8;
       overflow: hidden;
       pointer-events: none;
-      font-family: var(--font-mono);
-      font-size: clamp(0.65rem, 1.2vw, 1rem);
-      line-height: 1.6;
-      color: rgba(255, 255, 255, 0.08);
       white-space: pre;
-      user-select: none;
-      z-index: 0;
+      animation: pulse 4s ease-in-out infinite alternate;
     }
-    .ascii-field span {
-      display: inline-block;
-      animation: asciiPulse 4s ease-in-out infinite;
-    }
-    @keyframes asciiPulse {
-      0%, 100% { opacity: 0.04; }
-      50% { opacity: 0.18; }
-    }
+    @keyframes pulse { from { opacity: 0.35; } to { opacity: 0.62; } }
 
-    /* ===========================================
-       GRID TEXTURE OVERLAY
-        subtle structural grid on orange background
-       =========================================== */
-    .grid-overlay {
-      position: absolute;
-      inset: 0;
-      pointer-events: none;
-      background-image:
-        linear-gradient(rgba(255, 255, 255, 0.04) 1px, transparent 1px),
-        linear-gradient(90deg, rgba(255, 255, 255, 0.04) 1px, transparent 1px);
-      background-size: clamp(40px, 5vw, 80px) clamp(40px, 5vw, 80px);
-      z-index: 1;
+    .columns-4, .six-grid, .comparison, .timeline, .cycle-layout {
+      display: grid;
+      gap: clamp(0.8rem, 1.6vw, 1.3rem);
+      margin-top: clamp(1rem, 4vh, 2.4rem);
     }
+    .columns-4 { grid-template-columns: repeat(4, 1fr); }
+    .six-grid { grid-template-columns: repeat(3, 1fr); }
+    .comparison, .cycle-layout { grid-template-columns: repeat(2, 1fr); }
 
-    /* ===========================================
-       COVER SLIDE
-       安全橙满屏 + 中央超大标题 + 页眉页脚
-       =========================================== */
-    .slide-cover {
-      background: var(--accent-main);
-      color: #fff;
-      justify-content: space-between;
+    .card {
+      min-height: clamp(9rem, 24vh, 15rem);
+      border: 1px solid rgba(10,10,10,0.14);
+      background: var(--surface);
+      padding: clamp(0.9rem, 1.8vw, 1.3rem);
     }
-
-    .slide-header {
-      position: absolute;
-      top: var(--slide-padding);
-      left: var(--slide-padding);
-      right: var(--slide-padding);
-      display: flex;
-      justify-content: space-between;
-      align-items: flex-start;
-      z-index: 10;
-      font-family: var(--font-mono);
+    .card.accent { background: var(--accent-main); color: var(--surface); border-color: var(--accent-main); }
+    .dark .card { border-color: rgba(255,255,255,0.16); background: rgba(255,255,255,0.08); }
+    .card small {
+      display: block;
+      font-family: var(--mono);
       font-size: var(--small-size);
+      letter-spacing: 0.12em;
+      margin-bottom: clamp(1rem, 2vh, 1.6rem);
       text-transform: uppercase;
-      letter-spacing: 0.15em;
-      color: rgba(255, 255, 255, 0.7);
     }
+    .card h3 {
+      font-size: clamp(1.1rem, 2vw, 1.55rem);
+      font-weight: 500;
+      line-height: 1.18;
+      margin-bottom: 0.65rem;
+    }
+    .card p, .card li {
+      color: currentColor;
+      font-size: var(--body-size);
+      line-height: 1.5;
+      opacity: 0.7;
+    }
+    .card ul { display: grid; gap: 0.38rem; list-style: none; }
 
-    .slide-footer {
-      position: absolute;
-      bottom: var(--slide-padding);
-      left: var(--slide-padding);
-      right: var(--slide-padding);
+    .tower {
+      display: grid;
+      align-items: end;
+      gap: clamp(0.7rem, 1.4vw, 1rem);
+      grid-template-columns: repeat(5, 1fr);
+      height: clamp(16rem, 48vh, 28rem);
+      margin-top: clamp(1rem, 4vh, 2rem);
+    }
+    .bar {
       display: flex;
+      flex-direction: column;
       justify-content: space-between;
-      align-items: flex-end;
-      z-index: 10;
-      font-family: var(--font-mono);
-      font-size: var(--small-size);
-      text-transform: uppercase;
-      letter-spacing: 0.1em;
-      color: rgba(255, 255, 255, 0.7);
+      min-height: 5rem;
+      background: var(--bg-secondary);
+      border-top: 6px solid var(--text-primary);
+      padding: 0.8rem;
     }
+    .bar.accent { background: var(--accent-main); border-color: var(--accent-main); color: var(--surface); }
+    .bar:nth-child(1) { height: 42%; }
+    .bar:nth-child(2) { height: 58%; }
+    .bar:nth-child(3) { height: 78%; }
+    .bar:nth-child(4) { height: 100%; }
+    .bar:nth-child(5) { height: 64%; }
+    .bar strong { font-size: clamp(1.5rem, 4vw, 3.6rem); font-weight: 200; letter-spacing: -0.06em; }
+    .bar span { font-family: var(--mono); font-size: var(--small-size); text-transform: uppercase; }
 
-    .cover-main {
+    .timeline {
       position: relative;
-      z-index: 5;
-      flex: 1;
+      grid-template-columns: repeat(5, 1fr);
+      padding-top: clamp(2rem, 6vh, 4rem);
+    }
+    .timeline::before {
+      content: "";
+      position: absolute;
+      left: 0;
+      right: 0;
+      top: clamp(3rem, 8vh, 5rem);
+      border-top: 2px dashed currentColor;
+      opacity: 0.28;
+    }
+    .node {
+      position: relative;
+      padding-top: clamp(2rem, 6vh, 4rem);
+    }
+    .node::before {
+      content: "";
+      position: absolute;
+      top: clamp(2.35rem, 6.7vh, 4.35rem);
+      left: 0;
+      width: 1rem;
+      height: 1rem;
+      background: currentColor;
+      border-radius: 999px;
+      transform: translateY(-50%);
+    }
+    .node.active::before { background: var(--accent-main); width: 1.3rem; height: 1.3rem; }
+    .node h3 { font-size: clamp(1rem, 1.8vw, 1.45rem); font-weight: 500; margin-bottom: 0.45rem; }
+    .node p { color: var(--text-secondary); font-size: var(--body-size); line-height: 1.45; }
+
+    .divider {
+      position: absolute;
+      bottom: 0;
+      left: 50%;
+      top: 0;
+      width: 1px;
+      background: currentColor;
+      opacity: 0.18;
+    }
+
+    .cycle {
+      position: relative;
+      aspect-ratio: 1;
+      max-height: min(54vh, 480px);
+      border: 2px solid currentColor;
+      border-radius: 999px;
+      margin-left: auto;
+      width: min(42vw, 480px);
+    }
+    .cycle::before,
+    .cycle::after {
+      content: "";
+      position: absolute;
+      inset: 17%;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      opacity: 0.4;
+    }
+    .cycle::after { inset: 34%; background: var(--accent-muted); border-color: var(--accent-main); }
+    .cycle-node {
+      position: absolute;
+      display: grid;
+      place-items: center;
+      width: 4.2rem;
+      height: 4.2rem;
+      background: var(--surface);
+      border: 2px solid var(--accent-main);
+      color: var(--text-primary);
+      font-family: var(--mono);
+      font-size: var(--small-size);
+      text-transform: uppercase;
+    }
+    .cycle-node:nth-child(1) { left: 50%; top: -1rem; transform: translateX(-50%); }
+    .cycle-node:nth-child(2) { right: -1rem; top: 50%; transform: translateY(-50%); }
+    .cycle-node:nth-child(3) { bottom: -1rem; left: 50%; transform: translateX(-50%); }
+    .cycle-node:nth-child(4) { left: -1rem; top: 50%; transform: translateY(-50%); }
+
+    .closing-grid {
+      display: grid;
+      grid-template-columns: 45% 55%;
+      min-height: 100%;
+    }
+    .closing-left, .closing-right {
       display: flex;
       flex-direction: column;
       justify-content: center;
-      padding: 0 var(--slide-padding);
+      padding: var(--slide-padding);
     }
+    .closing-left { background: var(--accent-main); color: var(--surface); }
+    .closing-right { background: var(--bg-primary); color: var(--text-primary); }
+    .closing-title { font-size: clamp(2.4rem, 7vw, 7rem); font-weight: 200; letter-spacing: -0.07em; line-height: 0.95; }
 
-    .cover-title {
-      font-size: clamp(2.5rem, 9vw, 7rem);
-      font-weight: 900;
-      line-height: 1.0;
-      letter-spacing: -0.03em;
-      margin-bottom: var(--content-gap);
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.72s var(--ease), transform 0.72s var(--ease);
     }
-    .cover-title span {
-      display: block;
-      font-weight: 300;
-      font-size: 0.55em;
-      letter-spacing: 0.02em;
-      margin-top: 0.2em;
-      opacity: 0.9;
-    }
+    .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+    .reveal:nth-child(1) { transition-delay: 0.06s; }
+    .reveal:nth-child(2) { transition-delay: 0.14s; }
+    .reveal:nth-child(3) { transition-delay: 0.22s; }
+    .reveal:nth-child(4) { transition-delay: 0.30s; }
 
-    .cover-tagline {
-      font-family: var(--font-mono);
-      font-size: var(--body-size);
-      letter-spacing: 0.1em;
-      text-transform: uppercase;
-      opacity: 0.8;
-      max-width: min(80vw, 600px);
+    .progress {
+      position: fixed;
+      left: 0;
+      top: 0;
+      z-index: 70;
+      height: 4px;
+      width: 100%;
+      background: var(--accent-main);
+      transform: scaleX(var(--progress, 0));
+      transform-origin: left;
+      transition: transform 0.35s var(--ease);
     }
+    .dots {
+      position: fixed;
+      right: clamp(1rem, 2.8vw, 2.5rem);
+      top: 50%;
+      z-index: 80;
+      display: flex;
+      flex-direction: column;
+      gap: 0.65rem;
+      transform: translateY(-50%);
+    }
+    .dots button {
+      width: 9px;
+      height: 9px;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      background: transparent;
+      cursor: pointer;
+      padding: 0;
+    }
+    .dots button.active { background: var(--accent-main); border-color: var(--accent-main); }
 
-    /* ===========================================
-       RESPONSIVE ADJUSTMENTS
-       =========================================== */
     @media (max-width: 900px) {
-      .cover-title { font-size: clamp(2rem, 11vw, 4rem); }
-      .cover-title span { font-size: 0.5em; }
+      .columns-4, .six-grid, .timeline, .comparison, .cycle-layout, .closing-grid { grid-template-columns: 1fr; }
+      .card:nth-child(n+5), .node:nth-child(n+4) { display: none; }
+      .cycle { display: none; }
+      .closing-left, .closing-right { min-height: 50vh; }
     }
-
-    @media (max-width: 600px) {
-      .cover-title { font-size: clamp(2rem, 12vw, 3.5rem); }
-      .slide-header,
-      .slide-footer { letter-spacing: 0.08em; }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      html { scroll-behavior: auto; }
     }
   </style>
 </head>
-<body>
-  <div class="progress-bar" id="progressBar"></div>
-  <!-- SLIDE 1: Cover -->
-  <section class="slide slide-cover" data-slide="1">
-    <div class="ascii-field" id="asciiCover"></div>
-    <div class="grid-overlay"></div>
-    <header class="slide-header reveal">
-      <span>Swiss Modern / Template</span>
-      <span>01</span>
-    </header>
-    <main class="cover-main">
-      <h1 class="cover-title reveal">瑞士国际风<span>封面页模版预览</span></h1>
-      <p class="cover-tagline reveal">网格秩序 · 单一焦点 · 理性警示</p>
-    </main>
-    <footer class="slide-footer reveal">
-      <span>企业宣讲 · 安全宣贯</span>
-      <span>Scroll / Arrow / Space</span>
-    </footer>
+<body class="readonly-preview" data-preview-mode="readonly">
+  <div class="progress" id="progressBar" aria-hidden="true"></div>
+  <nav class="dots" id="navDots" aria-label="幻灯片导航"></nav>
+
+  <section class="slide orange" aria-label="封面页 · 安全橙海报封面">
+    <pre class="ascii" aria-hidden="true">+ + + + + + + + + + + + + + + + + + + + + +
+0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1 0 1
+SAFE GRID / SIGNAL / ORANGE / SYSTEM / ALERT
++ + + + + + + + + + + + + + + + + + + + +</pre>
+    <header class="header"><span>swiss modern</span><span>cover.orange_poster</span></header>
+    <div class="content">
+      <p class="kicker reveal">Industrial Grid</p>
+      <h1 class="title reveal">瑞士国际风</h1>
+      <p class="lead reveal">安全橙作为单一视觉锚点，网格秩序、极细分隔线与无衬线大字构成工业海报式开场。</p>
+    </div>
+    <footer class="footer"><span>module / signal / responsibility</span><span>2026</span></footer>
+  </section>
+
+  <section class="slide" aria-label="内容页 · 四列卡片型目录降级">
+    <div class="grid-bg"></div>
+    <header class="header"><span>index fallback</span><span>content.four_column_cards</span></header>
+    <div class="content">
+      <p class="kicker reveal">Agenda disabled</p>
+      <h2 class="page-title reveal">结构入口使用四列模块</h2>
+      <p class="lead reveal">本风格没有原生目录页和章节页；必要时用内容页标题与明暗节奏完成转场。</p>
+      <div class="columns-4">
+        <article class="card reveal"><small>01</small><h3>安全橙封面</h3><p>强主题标题与工业信号感。</p></article>
+        <article class="card reveal"><small>02</small><h3>数据塔</h3><p>指标比较与排名冲击。</p></article>
+        <article class="card reveal"><small>03</small><h3>流程闭环</h3><p>时间线与治理链路。</p></article>
+        <article class="card accent reveal"><small>04</small><h3>行动收束</h3><p>分栏宣言封底。</p></article>
+      </div>
+    </div>
+    <footer class="footer"><span>four equal modules · one accent block</span><span>02</span></footer>
+  </section>
+
+  <section class="slide dark" aria-label="内容页 · KPI 数据塔">
+    <div class="grid-bg"></div>
+    <header class="header"><span>kpi tower</span><span>content.kpi_tower</span></header>
+    <div class="content">
+      <p class="kicker reveal">Comparable metrics</p>
+      <h2 class="page-title reveal">最高项用安全橙点燃</h2>
+      <div class="tower">
+        <div class="bar reveal"><span>A</span><strong>42</strong></div>
+        <div class="bar reveal"><span>B</span><strong>58</strong></div>
+        <div class="bar reveal"><span>C</span><strong>78</strong></div>
+        <div class="bar accent reveal"><span>D</span><strong>96</strong></div>
+        <div class="bar reveal"><span>E</span><strong>64</strong></div>
+      </div>
+    </div>
+    <footer class="footer"><span>bottom aligned towers · single highlight</span><span>03</span></footer>
+  </section>
+
+  <section class="slide" aria-label="内容页 · 横向时间线">
+    <div class="grid-bg"></div>
+    <header class="header"><span>timeline</span><span>content.timeline</span></header>
+    <div class="content">
+      <p class="kicker reveal">Process path</p>
+      <h2 class="page-title reveal">阶段用水平轴建立秩序</h2>
+      <div class="timeline">
+        <article class="node reveal"><h3>识别</h3><p>定义风险和对象。</p></article>
+        <article class="node reveal"><h3>评估</h3><p>量化影响范围。</p></article>
+        <article class="node active reveal"><h3>响应</h3><p>当前节点用橙色强调。</p></article>
+        <article class="node reveal"><h3>复盘</h3><p>沉淀规则和责任。</p></article>
+        <article class="node reveal"><h3>改进</h3><p>进入下一轮闭环。</p></article>
+      </div>
+    </div>
+    <footer class="footer"><span>dashed axis · alternating stages</span><span>04</span></footer>
+  </section>
+
+  <section class="slide" aria-label="内容页 · 双栏对比型">
+    <div class="grid-bg"></div><div class="divider" aria-hidden="true"></div>
+    <header class="header"><span>comparison</span><span>content.comparison_columns</span></header>
+    <div class="content">
+      <p class="kicker reveal">Before / After</p>
+      <h2 class="page-title reveal">左右分栏让取舍更明确</h2>
+      <div class="comparison">
+        <article class="card reveal"><small>Before</small><h3>信息散落</h3><ul><li>判断不明确</li><li>指标没有排序</li><li>视觉焦点分散</li></ul></article>
+        <article class="card accent reveal"><small>After</small><h3>模块化决策</h3><ul><li>一个核心判断</li><li>一个橙色焦点</li><li>清晰责任列表</li></ul></article>
+      </div>
+    </div>
+    <footer class="footer"><span>central divider · right side emphasis</span><span>05</span></footer>
+  </section>
+
+  <section class="slide dark" aria-label="内容页 · 闭环图示型">
+    <div class="grid-bg"></div>
+    <header class="header"><span>cycle diagram</span><span>content.cycle_diagram</span></header>
+    <div class="content cycle-layout">
+      <div>
+        <p class="kicker reveal">Governance loop</p>
+        <h2 class="page-title reveal">机制说明配合闭环图示</h2>
+        <p class="lead reveal">左侧解释闭环逻辑，右侧用同心圆和四个节点表达持续反馈。</p>
+      </div>
+      <div class="cycle reveal">
+        <div class="cycle-node">Plan</div><div class="cycle-node">Do</div><div class="cycle-node">Check</div><div class="cycle-node">Act</div>
+      </div>
+    </div>
+    <footer class="footer"><span>left copy · right loop diagram</span><span>06</span></footer>
+  </section>
+
+  <section class="slide" aria-label="内容页 · 六宫格卡片型">
+    <div class="grid-bg"></div>
+    <header class="header"><span>six grid</span><span>content.six_grid_cards</span></header>
+    <div class="content">
+      <p class="kicker reveal">Capability matrix</p>
+      <h2 class="page-title reveal">清单和矩阵使用六宫格</h2>
+      <div class="six-grid">
+        <article class="card reveal"><small>01</small><h3>范围</h3><p>边界清楚。</p></article>
+        <article class="card reveal"><small>02</small><h3>责任</h3><p>角色明确。</p></article>
+        <article class="card reveal"><small>03</small><h3>流程</h3><p>路径稳定。</p></article>
+        <article class="card reveal"><small>04</small><h3>数据</h3><p>指标可比。</p></article>
+        <article class="card reveal"><small>05</small><h3>复盘</h3><p>结果沉淀。</p></article>
+        <article class="card accent reveal"><small>06</small><h3>行动</h3><p>焦点突出。</p></article>
+      </div>
+    </div>
+    <footer class="footer"><span>3x2 grid · final item highlighted</span><span>07</span></footer>
+  </section>
+
+  <section class="slide" aria-label="封底页 · 分栏宣言封底">
+    <div class="closing-grid">
+      <div class="closing-left">
+        <p class="kicker reveal">closing.split_manifesto</p>
+        <h2 class="closing-title reveal">责任必须被看见</h2>
+        <p class="lead reveal">Swiss Modern / 2026</p>
+      </div>
+      <div class="closing-right">
+        <p class="kicker reveal">Action Statement</p>
+        <div class="columns-4" style="grid-template-columns:1fr;">
+          <article class="card reveal"><small>01</small><h3>看见风险</h3><p>把模糊问题转化为可讨论对象。</p></article>
+          <article class="card reveal"><small>02</small><h3>明确责任</h3><p>每个模块都对应一个行动主体。</p></article>
+          <article class="card accent reveal"><small>03</small><h3>立即行动</h3><p>用橙色收束到下一步。</p></article>
+        </div>
+      </div>
+    </div>
   </section>
 
   <script>
-    /* ===========================================
-       ASCII BREATHING FIELD GENERATOR
-       随机生成几何字符点阵，营造数字化警觉氛围
-       =========================================== */
-    function fillAsciiField(id, chars) {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const width = window.innerWidth;
-      const height = window.innerHeight;
-      const fontSize = parseFloat(getComputedStyle(el).fontSize) || 14;
-      const cols = Math.ceil(width / (fontSize * 0.7));
-      const rows = Math.ceil(height / (fontSize * 1.6));
-      let html = '';
-      for (let r = 0; r < rows; r++) {
-        let line = '';
-        for (let c = 0; c < cols; c++) {
-          const ch = chars[Math.floor(Math.random() * chars.length)];
-          const delay = (Math.random() * 4).toFixed(2);
-          line += `<span style="animation-delay:${delay}s">${ch}</span>`;
-        }
-        html += line + '\n';
-      }
-      el.innerHTML = html;
-    }
-
-    const asciiChars = ['+', '×', '·', '○', '△', '□', '│', '─'];
-    fillAsciiField('asciiCover', asciiChars);
-    window.addEventListener('resize', () => fillAsciiField('asciiCover', asciiChars));
-
-    /* ===========================================
-       SLIDE VISIBILITY CONTROLLER
-       单页封面：进入视口即触发 reveal 动画
-       =========================================== */
-    class SlidePresentation {
+    class PreviewDeck {
       constructor() {
-        this.slides = document.querySelectorAll('.slide');
-        this.totalSlides = this.slides.length;
-        this.currentIndex = 0;
-        this.progressBar = document.getElementById('progressBar');
+        this.slides = Array.from(document.querySelectorAll(".slide"));
+        this.index = 0;
+        this.progress = document.getElementById("progressBar");
+        this.dots = document.getElementById("navDots");
+        this.locked = false;
+        this.enforceReadOnly();
+        this.setupDots();
         this.setupObserver();
-        this.updateUI();
+        this.setupInput();
+        this.update();
+        this.slides[0]?.classList.add("visible");
       }
-
+      enforceReadOnly() {
+        document.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
+        document.querySelectorAll("input, textarea, select").forEach((el) => {
+          el.setAttribute("disabled", "disabled");
+          el.setAttribute("aria-disabled", "true");
+        });
+      }
+      setupDots() {
+        this.slides.forEach((_, i) => {
+          const dot = document.createElement("button");
+          dot.type = "button";
+          dot.setAttribute("aria-label", `跳转到第 ${i + 1} 页`);
+          dot.addEventListener("click", () => this.go(i));
+          this.dots.appendChild(dot);
+        });
+      }
       setupObserver() {
         const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('visible');
-              this.currentIndex = Array.from(this.slides).indexOf(entry.target);
-              this.updateUI();
-            }
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add("visible");
+            this.index = this.slides.indexOf(entry.target);
+            this.update();
           });
-        }, { threshold: 0.4 });
-        this.slides.forEach(s => observer.observe(s));
+        }, { threshold: 0.45 });
+        this.slides.forEach((slide) => observer.observe(slide));
       }
-
-      updateUI() {
-        if (this.progressBar) {
-          this.progressBar.style.width = ((this.currentIndex + 1) / this.totalSlides * 100) + '%';
-        }
+      setupInput() {
+        document.addEventListener("keydown", (event) => {
+          if (["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.go(this.index + 1); }
+          if (["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.go(this.index - 1); }
+        });
+        document.addEventListener("wheel", (event) => {
+          if (this.locked || Math.abs(event.deltaY) < 28) return;
+          event.preventDefault();
+          this.locked = true;
+          this.go(this.index + (event.deltaY > 0 ? 1 : -1));
+          setTimeout(() => { this.locked = false; }, 650);
+        }, { passive: false });
+      }
+      go(next) {
+        const index = Math.max(0, Math.min(next, this.slides.length - 1));
+        const target = this.slides[index];
+        if (!target) return;
+        target.classList.remove("visible");
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        this.index = index;
+        this.update();
+        requestAnimationFrame(() => requestAnimationFrame(() => target.classList.add("visible")));
+      }
+      update() {
+        this.progress.style.setProperty("--progress", String((this.index + 1) / this.slides.length));
+        Array.from(this.dots.children).forEach((dot, i) => dot.classList.toggle("active", i === this.index));
       }
     }
-
-
-    new SlidePresentation();  </script>
+    document.addEventListener("DOMContentLoaded", () => { window.swissModernPreview = new PreviewDeck(); });
+  </script>
 </body>
 </html>

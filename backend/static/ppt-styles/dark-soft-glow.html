@@ -3,171 +3,10 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>暗色柔光 · 风格预览</title>
-
-  <!-- Fonts: 国内可访问的 Google Fonts 镜像 -->
+  <title>暗色柔光 · 完整风格预览</title>
   <link rel="preconnect" href="https://fonts.loli.net" />
   <link rel="stylesheet" href="https://fonts.loli.net/css2?family=Cormorant:ital,wght@0,400;0,600;1,400;1,600&family=IBM+Plex+Sans:wght@300;400;500&family=Noto+Serif+SC:wght@400;600;700&family=Noto+Sans+SC:wght@300;400;500&display=swap" />
-
   <style>
-    /* ===========================================
-       VIEWPORT FITTING: MANDATORY BASE STYLES
-       Include this ENTIRE file in every presentation.
-       These styles ensure slides fit exactly in the viewport.
-       =========================================== */
-
-    /* 1. Lock html/body to viewport */
-    html, body {
-      height: 100%;
-      overflow-x: hidden;
-    }
-
-    html {
-      scroll-snap-type: y mandatory;
-      scroll-behavior: smooth;
-    }
-
-    /* 2. Each slide = exact viewport height */
-    .slide {
-      width: 100vw;
-      height: 100vh;
-      height: 100dvh; /* Dynamic viewport height for mobile browsers */
-      overflow: hidden; /* CRITICAL: Prevent ANY overflow */
-      scroll-snap-align: start;
-      display: flex;
-      flex-direction: column;
-      position: relative;
-    }
-
-    /* 3. Content container with flex for centering */
-    .slide-content {
-      flex: 1;
-      display: flex;
-      flex-direction: column;
-      justify-content: center;
-      max-height: 100%;
-      overflow: hidden; /* Double-protection against overflow */
-      padding: var(--slide-padding);
-    }
-
-    /* 4. ALL typography uses clamp() for responsive scaling */
-    :root {
-      /* Titles scale from mobile to desktop */
-      --title-size: clamp(1.5rem, 5vw, 4rem);
-      --h2-size: clamp(1.25rem, 3.5vw, 2.5rem);
-      --h3-size: clamp(1rem, 2.5vw, 1.75rem);
-
-      /* Body text */
-      --body-size: clamp(0.75rem, 1.5vw, 1.125rem);
-      --small-size: clamp(0.65rem, 1vw, 0.875rem);
-
-      /* Spacing scales with viewport */
-      --slide-padding: clamp(1rem, 4vw, 4rem);
-      --content-gap: clamp(0.5rem, 2vw, 2rem);
-      --element-gap: clamp(0.25rem, 1vw, 1rem);
-    }
-
-    /* 5. Cards/containers use viewport-relative max sizes */
-    .card, .container, .content-box {
-      max-width: min(90vw, 1000px);
-      max-height: min(80vh, 700px);
-    }
-
-    /* 6. Lists auto-scale with viewport */
-    .feature-list, .bullet-list {
-      gap: clamp(0.4rem, 1vh, 1rem);
-    }
-
-    .feature-list li, .bullet-list li {
-      font-size: var(--body-size);
-      line-height: 1.4;
-    }
-
-    /* 7. Grids adapt to available space */
-    .grid {
-      display: grid;
-      grid-template-columns: repeat(auto-fit, minmax(min(100%, 250px), 1fr));
-      gap: clamp(0.5rem, 1.5vw, 1rem);
-    }
-
-    /* 8. Images constrained to viewport */
-    img, .image-container {
-      max-width: 100%;
-      max-height: min(50vh, 400px);
-      object-fit: contain;
-    }
-
-    /* ===========================================
-       RESPONSIVE BREAKPOINTS
-       Aggressive scaling for smaller viewports
-       =========================================== */
-
-    /* Short viewports (< 700px height) */
-    @media (max-height: 700px) {
-      :root {
-        --slide-padding: clamp(0.75rem, 3vw, 2rem);
-        --content-gap: clamp(0.4rem, 1.5vw, 1rem);
-        --title-size: clamp(1.25rem, 4.5vw, 2.5rem);
-        --h2-size: clamp(1rem, 3vw, 1.75rem);
-      }
-    }
-
-    /* Very short viewports (< 600px height) */
-    @media (max-height: 600px) {
-      :root {
-        --slide-padding: clamp(0.5rem, 2.5vw, 1.5rem);
-        --content-gap: clamp(0.3rem, 1vw, 0.75rem);
-        --title-size: clamp(1.1rem, 4vw, 2rem);
-        --body-size: clamp(0.7rem, 1.2vw, 0.95rem);
-      }
-
-      /* Hide non-essential elements */
-      .nav-dots, .decorative {
-        display: none;
-      }
-    }
-
-    /* Extremely short (landscape phones, < 500px height) */
-    @media (max-height: 500px) {
-      :root {
-        --slide-padding: clamp(0.4rem, 2vw, 1rem);
-        --title-size: clamp(1rem, 3.5vw, 1.5rem);
-        --h2-size: clamp(0.9rem, 2.5vw, 1.25rem);
-        --body-size: clamp(0.65rem, 1vw, 0.85rem);
-      }
-    }
-
-    /* Narrow viewports (< 600px width) */
-    @media (max-width: 600px) {
-      :root {
-        --title-size: clamp(1.25rem, 7vw, 2.5rem);
-      }
-
-      /* Stack grids vertically */
-      .grid {
-        grid-template-columns: 1fr;
-      }
-    }
-
-    /* ===========================================
-       REDUCED MOTION
-       Respect user preferences
-       =========================================== */
-    @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after {
-        animation-duration: 0.01ms !important;
-        transition-duration: 0.2s !important;
-      }
-
-      html {
-        scroll-behavior: auto;
-      }
-    }
-
-    /* ===========================================
-       THEME: 暗色柔光（Dark Soft Glow）
-       严格使用风格模版预设，不混搭色值。
-       =========================================== */
     :root {
       --bg-primary: #0f0f0f;
       --bg-secondary: #1a1a1a;
@@ -177,454 +16,442 @@
       --accent-highlight: #e8b4b8;
       --accent-muted: #c9b896;
       --surface: rgba(232, 228, 223, 0.08);
-
+      --slide-padding: clamp(1rem, 5vw, 4.5rem);
+      --title-size: clamp(2rem, 5.2vw, 5.2rem);
+      --body-size: clamp(0.78rem, 1.25vw, 1.08rem);
+      --small-size: clamp(0.66rem, 0.95vw, 0.82rem);
       --font-serif: "Cormorant", "Noto Serif SC", serif;
       --font-sans: "IBM Plex Sans", "Noto Sans SC", sans-serif;
-
-      --hero-size: clamp(3rem, 7.5vw, 7.5rem);
-      --subtitle-size: clamp(0.8rem, 1.6vw, 1.25rem);
-      --body-size: clamp(0.8rem, 1.4vw, 1.125rem);
-      --small-size: clamp(0.65rem, 1vw, 0.875rem);
-
-      --ease-out-expo: cubic-bezier(0.16, 1, 0.3, 1);
-      --duration-normal: 0.8s;
+      --ease: cubic-bezier(0.16, 1, 0.3, 1);
     }
 
-    /* ===========================================
-       BASE RESET
-       =========================================== */
-    * {
-      margin: 0;
-      padding: 0;
-      box-sizing: border-box;
-    }
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow-x: hidden; background: var(--bg-primary); }
+    html { scroll-snap-type: y mandatory; scroll-behavior: smooth; }
+    body { color: var(--text-primary); font-family: var(--font-sans); font-weight: 300; }
 
-    body {
-      font-family: var(--font-sans);
-      background: var(--bg-primary);
-      color: var(--text-primary);
-      -webkit-font-smoothing: antialiased;
-      -moz-osx-font-smoothing: grayscale;
-    }
-
-    /* ===========================================
-       REVEAL ANIMATIONS
-       =========================================== */
-    .reveal {
-      opacity: 0;
-      transform: translateY(24px);
-      transition:
-        opacity var(--duration-normal) var(--ease-out-expo),
-        transform var(--duration-normal) var(--ease-out-expo);
-    }
-
-    .slide.visible .reveal {
-      opacity: 1;
-      transform: translateY(0);
-    }
-
-    .reveal:nth-child(1) { transition-delay: 0.1s; }
-    .reveal:nth-child(2) { transition-delay: 0.25s; }
-    .reveal:nth-child(3) { transition-delay: 0.4s; }
-    .reveal:nth-child(4) { transition-delay: 0.55s; }
-    .reveal:nth-child(5) { transition-delay: 0.7s; }
-
-    /* ===========================================
-       COVER SLIDE: HERO DARK + SOFT GLOW
-       深黑底、柔焦光晕、左右细竖线、居中衬线标题。
-       =========================================== */
-    .title-slide {
-      background: var(--bg-primary);
-      color: var(--text-primary);
-    }
-
-    /* 柔焦光晕层 */
-    .glow-layer {
-      position: absolute;
-      inset: 0;
-      z-index: 0;
-      pointer-events: none;
+    .slide {
+      position: relative;
+      display: flex;
+      flex-direction: column;
+      width: 100vw;
+      height: 100vh;
+      height: 100dvh;
       overflow: hidden;
+      scroll-snap-align: start;
+      background: var(--bg-primary);
+    }
+
+    .slide-content {
+      position: relative;
+      z-index: 2;
+      display: flex;
+      flex: 1;
+      flex-direction: column;
+      justify-content: center;
+      max-height: 100%;
+      overflow: hidden;
+      padding: var(--slide-padding);
     }
 
     .glow {
       position: absolute;
-      border-radius: 50%;
-      filter: blur(min(80px, 8vw));
-      opacity: 0.32;
+      width: clamp(14rem, 34vw, 28rem);
+      height: clamp(14rem, 34vw, 28rem);
+      border-radius: 999px;
+      filter: blur(70px);
+      opacity: 0.34;
       pointer-events: none;
+      transform: translate3d(0, 0, 0);
+      animation: drift 9s ease-in-out infinite alternate;
     }
 
-    .glow-1 {
-      width: min(55vw, 560px);
-      height: min(55vw, 560px);
-      top: -12%;
-      right: -8%;
-      background: radial-gradient(circle at center, var(--accent-main), transparent 70%);
-      animation: float-1 10s ease-in-out infinite alternate;
+    .glow.gold { background: var(--accent-main); right: 8%; top: 8%; }
+    .glow.pink { background: var(--accent-highlight); bottom: 8%; left: 9%; animation-delay: -3s; }
+    .glow.muted { background: var(--accent-muted); left: 43%; top: 48%; width: 18rem; height: 18rem; opacity: 0.18; }
+
+    @keyframes drift {
+      from { transform: translate(-1.2rem, 0.6rem) scale(0.96); }
+      to { transform: translate(1rem, -0.8rem) scale(1.05); }
     }
 
-    .glow-2 {
-      width: min(48vw, 480px);
-      height: min(48vw, 480px);
-      bottom: -14%;
-      left: -10%;
-      background: radial-gradient(circle at center, var(--accent-highlight), transparent 70%);
-      animation: float-2 12s ease-in-out infinite alternate;
-    }
-
-    .glow-3 {
-      width: min(32vw, 320px);
-      height: min(32vw, 320px);
-      top: 48%;
-      left: 50%;
-      transform: translate(-50%, -50%);
-      background: radial-gradient(circle at center, var(--accent-muted), transparent 70%);
-      opacity: 0.18;
-      animation: float-3 14s ease-in-out infinite alternate;
-    }
-
-    @keyframes float-1 {
-      0% { transform: translate(0, 0) scale(1); }
-      100% { transform: translate(-3%, 4%) scale(1.05); }
-    }
-
-    @keyframes float-2 {
-      0% { transform: translate(0, 0) scale(1); }
-      100% { transform: translate(4%, -3%) scale(1.06); }
-    }
-
-    @keyframes float-3 {
-      0% { transform: translate(-50%, -50%) scale(1); }
-      100% { transform: translate(-46%, -54%) scale(1.08); }
-    }
-
-    /* 左右细垂直装饰线 */
-    .vert-line {
+    .v-line {
       position: absolute;
-      top: 0;
-      bottom: 0;
+      top: 8vh;
+      bottom: 8vh;
       width: 1px;
-      z-index: 1;
-      pointer-events: none;
-      background: linear-gradient(
-        to bottom,
-        transparent 0%,
-        rgba(212, 165, 116, 0.22) 18%,
-        rgba(212, 165, 116, 0.22) 82%,
-        transparent 100%
-      );
+      background: linear-gradient(180deg, transparent, rgba(212, 165, 116, 0.65), transparent);
+      opacity: 0.75;
     }
+    .v-line.left { left: 8vw; }
+    .v-line.right { right: 8vw; }
 
-    .vert-line.left { left: clamp(1.25rem, 5vw, 4rem); }
-    .vert-line.right { right: clamp(1.25rem, 5vw, 4rem); }
-
-    /* 封面内容：全屏居中 */
-    .title-slide .slide-content {
-      position: relative;
-      z-index: 2;
-      align-items: center;
-      text-align: center;
-    }
-
-    /* 英文引导小字 */
-    .hero-kicker {
-      font-family: var(--font-sans);
+    .eyebrow {
+      color: var(--accent-main);
       font-size: var(--small-size);
       font-weight: 500;
+      letter-spacing: 0.22em;
+      margin-bottom: clamp(0.7rem, 1.8vh, 1.3rem);
       text-transform: uppercase;
-      letter-spacing: 0.28em;
-      color: var(--accent-main);
-      margin-bottom: var(--element-gap);
     }
 
-    /* 超大主标题：衬线，关键词斜体暖金 */
-    .hero-title {
+    .title {
       font-family: var(--font-serif);
-      font-size: var(--hero-size);
-      font-weight: 600;
-      line-height: 1.08;
-      letter-spacing: -0.02em;
-      color: var(--text-primary);
-      margin-bottom: var(--content-gap);
-    }
-
-    .hero-title em {
-      font-style: italic;
-      color: var(--accent-main);
-      font-weight: 600;
-    }
-
-    /* 封面说明 */
-    .hero-lead {
-      font-family: var(--font-sans);
-      font-size: var(--body-size);
-      font-weight: 300;
-      line-height: 1.75;
-      max-width: min(58ch, 76vw);
-      color: var(--text-secondary);
-      margin-bottom: var(--content-gap);
-    }
-
-    /* 关键词标签 */
-    .meta-row {
-      display: flex;
-      flex-wrap: wrap;
-      justify-content: center;
-      gap: clamp(0.5rem, 1.5vw, 1rem);
-      font-family: var(--font-sans);
-      font-size: var(--small-size);
+      font-size: var(--title-size);
       font-weight: 400;
-      letter-spacing: 0.08em;
-      color: var(--text-secondary);
+      line-height: 1.02;
+      letter-spacing: -0.03em;
     }
 
-    .meta-row span {
-      padding: 0.35em 0.85em;
-      border: 1px solid var(--surface);
+    .title em,
+    .accent {
+      color: var(--accent-main);
+      font-style: italic;
+    }
+
+    .lead {
+      color: var(--text-secondary);
+      font-size: var(--body-size);
+      line-height: 1.7;
+      max-width: 58ch;
+    }
+
+    .center { align-items: center; text-align: center; gap: clamp(0.8rem, 2vh, 1.5rem); }
+
+    .reveal {
+      opacity: 0;
+      transform: translateY(28px);
+      transition: opacity 0.8s var(--ease), transform 0.8s var(--ease);
+    }
+    .slide.visible .reveal { opacity: 1; transform: translateY(0); }
+    .reveal:nth-child(1) { transition-delay: 0.08s; }
+    .reveal:nth-child(2) { transition-delay: 0.16s; }
+    .reveal:nth-child(3) { transition-delay: 0.24s; }
+    .reveal:nth-child(4) { transition-delay: 0.32s; }
+
+    .quote {
+      color: var(--accent-muted);
+      font-family: var(--font-serif);
+      font-size: clamp(2.1rem, 6.2vw, 6.6rem);
+      font-style: italic;
+      font-weight: 400;
+      line-height: 1.05;
+      max-width: 12ch;
+    }
+
+    .grid-3 {
+      display: grid;
+      gap: clamp(0.8rem, 2vw, 1.4rem);
+      grid-template-columns: repeat(3, 1fr);
+      margin-top: clamp(1rem, 4vh, 3rem);
+      width: min(100%, 1040px);
+    }
+
+    .card {
+      min-height: clamp(12rem, 34vh, 19rem);
+      border: 1px solid rgba(232, 228, 223, 0.12);
+      background: var(--surface);
+      padding: clamp(1rem, 2vw, 1.6rem);
+      backdrop-filter: blur(18px);
+    }
+
+    .card-icon {
+      display: grid;
+      place-items: center;
+      width: clamp(2.5rem, 4vw, 3.5rem);
+      height: clamp(2.5rem, 4vw, 3.5rem);
+      border: 1px solid rgba(212, 165, 116, 0.35);
       border-radius: 999px;
       color: var(--accent-main);
-      background: rgba(212, 165, 116, 0.06);
+      font-family: var(--font-serif);
+      font-size: clamp(1.2rem, 2vw, 1.8rem);
+      margin-bottom: clamp(1rem, 2.4vh, 1.8rem);
     }
 
-    /* 底部杂志式元数据 */
-    .hero-footer {
-      position: absolute;
-      bottom: var(--slide-padding);
-      left: var(--slide-padding);
-      right: var(--slide-padding);
-      z-index: 2;
-      display: flex;
-      justify-content: space-between;
-      font-family: var(--font-sans);
-      font-size: var(--small-size);
-      font-weight: 400;
-      letter-spacing: 0.12em;
-      text-transform: uppercase;
+    .card h3 {
+      color: var(--accent-main);
+      font-family: var(--font-serif);
+      font-size: clamp(1.3rem, 2.4vw, 2rem);
+      font-weight: 600;
+      line-height: 1.1;
+      margin-bottom: 0.7rem;
+    }
+
+    .card p {
       color: var(--text-secondary);
-      opacity: 0.65;
+      font-size: var(--body-size);
+      line-height: 1.65;
     }
 
-    /* ===========================================
-       PROGRESS BAR & NAV DOTS
-       =========================================== */
-    .progress-bar {
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 1px solid rgba(212, 165, 116, 0.45);
+      border-radius: 999px;
+      color: var(--accent-main);
+      font-size: var(--small-size);
+      margin-top: clamp(1rem, 2vh, 1.5rem);
+      padding: 0.55rem 1rem;
+    }
+
+    .metric {
+      text-align: center;
+    }
+    .metric.featured {
+      border-color: rgba(212, 165, 116, 0.7);
+      transform: translateY(-0.8rem);
+    }
+    .metric strong {
+      display: block;
+      color: var(--accent-muted);
+      font-family: var(--font-serif);
+      font-size: clamp(3rem, 7vw, 6.8rem);
+      font-weight: 600;
+      line-height: 0.95;
+    }
+    .metric.featured strong { color: var(--accent-main); }
+    .metric small {
+      color: var(--text-secondary);
+      display: block;
+      font-size: var(--small-size);
+      letter-spacing: 0.16em;
+      margin: 0.8rem 0;
+      text-transform: uppercase;
+    }
+
+    .steps {
+      display: grid;
+      gap: clamp(0.7rem, 1.4vh, 1rem);
+      margin-top: clamp(1rem, 3vh, 2rem);
+      width: min(100%, 860px);
+    }
+    .step {
+      display: grid;
+      align-items: center;
+      grid-template-columns: auto 1fr;
+      gap: clamp(1rem, 2vw, 1.5rem);
+      border-top: 1px solid rgba(232, 228, 223, 0.12);
+      padding: clamp(0.8rem, 1.6vh, 1.15rem) 0;
+    }
+    .step-number {
+      display: grid;
+      place-items: center;
+      width: clamp(2.2rem, 3.6vw, 3.2rem);
+      height: clamp(2.2rem, 3.6vw, 3.2rem);
+      border: 1px solid var(--accent-main);
+      border-radius: 999px;
+      color: var(--accent-main);
+      font-family: var(--font-serif);
+      font-size: clamp(1.2rem, 2vw, 1.7rem);
+    }
+    .step h3 {
+      font-family: var(--font-serif);
+      font-size: clamp(1.2rem, 2.2vw, 1.8rem);
+      font-weight: 600;
+      margin-bottom: 0.2rem;
+    }
+    .step p { color: var(--text-secondary); font-size: var(--body-size); line-height: 1.5; }
+
+    .cta {
+      border: 0;
+      border-radius: 999px;
+      background: var(--accent-main);
+      color: var(--bg-primary);
+      font: 500 var(--body-size) var(--font-sans);
+      padding: 0.9rem 1.35rem;
+    }
+
+    .progress {
       position: fixed;
-      top: 0;
       left: 0;
-      height: 2px;
+      top: 0;
+      z-index: 50;
+      height: 3px;
       width: 100%;
-      z-index: 100;
       background: rgba(232, 228, 223, 0.08);
     }
-
-    .progress-bar::after {
-      content: "";
+    .progress span {
       display: block;
       height: 100%;
-      width: 100%;
-      background: var(--accent-main);
-      transform-origin: left;
-      transform: scaleX(1);
-      transition: transform 0.4s var(--ease-out-expo);
+      width: calc(var(--progress, 0) * 100%);
+      background: linear-gradient(90deg, var(--accent-main), var(--accent-highlight));
+      transition: width 0.35s var(--ease);
     }
-
-    .nav-dots {
+    .dots {
       position: fixed;
-      right: var(--slide-padding);
+      right: clamp(1rem, 3vw, 2.2rem);
       top: 50%;
-      transform: translateY(-50%);
-      z-index: 100;
+      z-index: 60;
       display: flex;
       flex-direction: column;
-      gap: 0.6rem;
+      gap: 0.65rem;
+      transform: translateY(-50%);
     }
-
-    .nav-dots button {
+    .dots button {
       width: 8px;
       height: 8px;
-      border-radius: 50%;
-      border: 1px solid rgba(232, 228, 223, 0.25);
+      border: 1px solid rgba(212, 165, 116, 0.55);
+      border-radius: 999px;
       background: transparent;
       cursor: pointer;
       padding: 0;
-      transition: background 0.3s ease, border-color 0.3s ease;
     }
+    .dots button.active { background: var(--accent-main); }
 
-    .nav-dots button.active {
-      background: var(--accent-main);
-      border-color: var(--accent-main);
+    @media (max-width: 800px) {
+      .grid-3 { grid-template-columns: 1fr; }
+      .card:nth-child(n+3) { display: none; }
+      .metric.featured { transform: none; }
     }
-
-    /* ===========================================
-       SMALL VIEWPORT TWEAKS FOR COVER
-       =========================================== */
-    @media (max-width: 600px) {
-      .hero-title {
-        letter-spacing: -0.01em;
-      }
-      .meta-row span {
-        padding: 0.3em 0.65em;
-      }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: 0.01ms !important; transition-duration: 0.01ms !important; }
+      html { scroll-behavior: auto; }
     }
   </style>
 </head>
-<body>
-  <!-- Progress indicator -->
-  <div class="progress-bar" id="progressBar"></div>
+<body class="readonly-preview" data-preview-mode="readonly">
+  <div class="progress" aria-hidden="true"><span id="progressFill"></span></div>
+  <nav class="dots" id="navDots" aria-label="幻灯片导航"></nav>
 
-  <!-- Slide navigation dots -->
-  <nav class="nav-dots" id="navDots" aria-label="幻灯片导航"></nav>
-
-  <!-- Edit mode trigger -->
-  <!-- COVER SLIDE -->
-  <section class="slide title-slide" id="slide-1" aria-label="封面">
-    <div class="glow-layer">
-      <div class="glow glow-1" aria-hidden="true"></div>
-      <div class="glow glow-2" aria-hidden="true"></div>
-      <div class="glow glow-3" aria-hidden="true"></div>
+  <section class="slide" aria-label="封面页 · 居中柔光英雄页">
+    <div class="glow gold"></div><div class="glow pink"></div><div class="v-line left"></div><div class="v-line right"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">cover.centered_glow_hero</p>
+      <h1 class="title reveal">暗色<em>柔光</em></h1>
+      <p class="lead reveal">深黑底、暖金光晕、衬线标题与极简几何线条，适合高端宣讲与品牌发布会。</p>
     </div>
+  </section>
 
-    <div class="vert-line left" aria-hidden="true"></div>
-    <div class="vert-line right" aria-hidden="true"></div>
+  <section class="slide" aria-label="内容页 · 金句陈述型">
+    <div class="glow muted"></div><div class="glow pink"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">content.statement_quote</p>
+      <h2 class="quote reveal">情绪先抵达，观点才被记住。</h2>
+      <p class="lead reveal">当章节需要转场，本风格使用金句陈述页，而不是传统章节页。</p>
+    </div>
+  </section>
 
-    <div class="slide-content">
-      <p class="hero-kicker reveal">Dark Soft Glow</p>
-      <h1 class="hero-title reveal">暗色<em>柔光</em></h1>
-      <p class="hero-lead reveal">
-        优雅、克制、温暖而高级。以近乎纯黑的深底为画布，通过柔焦暖色光斑与纤细几何线条营造艺术感，适合高端宣讲与品牌发布会。
-      </p>
-      <div class="meta-row reveal">
-        <span>暗色沉浸</span>
-        <span>柔焦光晕</span>
-        <span>衬线强调</span>
-        <span>极简几何</span>
+  <section class="slide" aria-label="内容页 · 三列卡片型">
+    <div class="glow gold"></div><div class="glow muted"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">content.three_feature_cards</p>
+      <h2 class="title reveal">三项价值保持同等呼吸</h2>
+      <div class="grid-3">
+        <article class="card reveal"><div class="card-icon">I</div><h3>氛围</h3><p>柔焦光晕提供高级感，避免写实插图干扰主题。</p><span class="pill">Glow</span></article>
+        <article class="card reveal"><div class="card-icon">II</div><h3>留白</h3><p>卡片密度克制，每项只保留标题与两三行说明。</p><span class="pill">Space</span></article>
+        <article class="card reveal"><div class="card-icon">III</div><h3>质感</h3><p>衬线标题与暖金边框构成发布会式的仪式感。</p><span class="pill">Premium</span></article>
       </div>
     </div>
+  </section>
 
-    <footer class="hero-footer">
-      <span>Style Preview</span>
-      <span>2026</span>
-    </footer>
+  <section class="slide" aria-label="内容页 · 数据卡片型">
+    <div class="glow gold"></div><div class="glow pink"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">content.metric_cards</p>
+      <h2 class="title reveal">数字以光感承托</h2>
+      <div class="grid-3">
+        <article class="card metric reveal"><small>Rank</small><strong>No.2</strong><p>普通数据使用香槟金，保持柔和。</p></article>
+        <article class="card metric featured reveal"><small>Featured</small><strong>88%</strong><p>核心数字放大并使用暖金强调。</p></article>
+        <article class="card metric reveal"><small>Index</small><strong>3.6x</strong><p>说明只保留一行关键解释。</p></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" aria-label="内容页 · 流程步骤型">
+    <div class="glow muted"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">content.vertical_steps</p>
+      <h2 class="title reveal">步骤用垂直节奏推进</h2>
+      <div class="steps">
+        <article class="step reveal"><span class="step-number">1</span><div><h3>建立感知</h3><p>用标题和光影先定义本页情绪。</p></div></article>
+        <article class="step reveal"><span class="step-number">2</span><div><h3>收束信息</h3><p>每一步只放一个动作与一行解释。</p></div></article>
+        <article class="step reveal"><span class="step-number">3</span><div><h3>给出行动</h3><p>最后一项自然过渡到 CTA 或下一页。</p></div></article>
+      </div>
+    </div>
+  </section>
+
+  <section class="slide" aria-label="封底页 · 居中行动封底">
+    <div class="glow gold"></div><div class="glow pink"></div><div class="v-line left"></div><div class="v-line right"></div>
+    <div class="slide-content center">
+      <p class="eyebrow reveal">closing.centered_cta</p>
+      <h2 class="title reveal">让下一步显得<em>自然</em></h2>
+      <p class="lead reveal">封底回到居中柔光，用一句结语和一个行动按钮完成品牌收束。</p>
+      <button class="cta reveal" type="button" disabled>Start the Conversation</button>
+    </div>
   </section>
 
   <script>
-    /* ===========================================
-       SLIDE PRESENTATION CONTROLLER
-       =========================================== */
-    class SlidePresentation {
+    class PreviewDeck {
       constructor() {
-        this.slides = document.querySelectorAll('.slide');
-        this.totalSlides = this.slides.length;
-        this.currentIndex = 0;
-        this.isScrolling = false;
-        this.progressBar = document.getElementById('progressBar');
-        this.navDots = document.getElementById('navDots');
-
+        this.slides = Array.from(document.querySelectorAll(".slide"));
+        this.index = 0;
+        this.fill = document.getElementById("progressFill");
+        this.dots = document.getElementById("navDots");
+        this.locked = false;
+        this.enforceReadOnly();
+        this.setupDots();
         this.setupObserver();
-        this.setupKeyboardNav();
-        this.setupTouchNav();
-        this.setupWheelNav();
-        this.setupNavDots();
-        this.updateUI();
+        this.setupInput();
+        this.update();
+        this.slides[0]?.classList.add("visible");
       }
-
-      setupObserver() {
-        const observer = new IntersectionObserver((entries) => {
-          entries.forEach(entry => {
-            if (entry.isIntersecting) {
-              entry.target.classList.add('visible');
-              this.currentIndex = Array.from(this.slides).indexOf(entry.target);
-              this.updateUI();
-            }
-          });
-        }, { threshold: 0.3 });
-
-        this.slides.forEach(s => observer.observe(s));
-      }
-
-      setupKeyboardNav() {
-        document.addEventListener('keydown', (e) => {
-          if (e.target.isContentEditable) return;
-
-          if (e.key === 'ArrowDown' || e.key === 'ArrowRight' || e.key === ' ' || e.key === 'PageDown') {
-            e.preventDefault();
-            this.goTo(this.currentIndex + 1);
-          } else if (e.key === 'ArrowUp' || e.key === 'ArrowLeft' || e.key === 'PageUp') {
-            e.preventDefault();
-            this.goTo(this.currentIndex - 1);
-          } else if (e.key === 'Home') {
-            e.preventDefault();
-            this.goTo(0);
-          } else if (e.key === 'End') {
-            e.preventDefault();
-            this.goTo(this.totalSlides - 1);
-          }
+      enforceReadOnly() {
+        document.querySelectorAll("[contenteditable]").forEach((el) => el.removeAttribute("contenteditable"));
+        document.querySelectorAll("input, textarea, select, button.cta").forEach((el) => {
+          el.setAttribute("disabled", "disabled");
+          el.setAttribute("aria-disabled", "true");
         });
       }
-
-      setupTouchNav() {
-        let startY = 0;
-        document.addEventListener('touchstart', (e) => {
-          if (e.target.isContentEditable) return;
-          startY = e.touches[0].clientY;
-        }, { passive: true });
-
-        document.addEventListener('touchend', (e) => {
-          if (e.target.isContentEditable) return;
-          const diff = startY - e.changedTouches[0].clientY;
-          if (Math.abs(diff) > 50) {
-            this.goTo(this.currentIndex + (diff > 0 ? 1 : -1));
-          }
-        }, { passive: true });
+      setupDots() {
+        this.slides.forEach((_, i) => {
+          const dot = document.createElement("button");
+          dot.type = "button";
+          dot.setAttribute("aria-label", `跳转到第 ${i + 1} 页`);
+          dot.addEventListener("click", () => this.go(i));
+          this.dots.appendChild(dot);
+        });
       }
-
-      setupWheelNav() {
-        document.addEventListener('wheel', (e) => {
-          if (this.isScrolling) return;
-          this.isScrolling = true;
-          setTimeout(() => { this.isScrolling = false; }, 800);
-          if (e.deltaY > 0) this.goTo(this.currentIndex + 1);
-          else if (e.deltaY < 0) this.goTo(this.currentIndex - 1);
-        }, { passive: true });
+      setupObserver() {
+        const observer = new IntersectionObserver((entries) => {
+          entries.forEach((entry) => {
+            if (!entry.isIntersecting) return;
+            entry.target.classList.add("visible");
+            this.index = this.slides.indexOf(entry.target);
+            this.update();
+          });
+        }, { threshold: 0.45 });
+        this.slides.forEach((slide) => observer.observe(slide));
       }
-
-      goTo(index) {
-        if (index < 0 || index >= this.totalSlides) return;
-        this.slides[index].scrollIntoView({ behavior: 'smooth' });
+      setupInput() {
+        document.addEventListener("keydown", (event) => {
+          if (["ArrowDown", "ArrowRight", "PageDown", " "].includes(event.key)) { event.preventDefault(); this.go(this.index + 1); }
+          if (["ArrowUp", "ArrowLeft", "PageUp"].includes(event.key)) { event.preventDefault(); this.go(this.index - 1); }
+        });
+        document.addEventListener("wheel", (event) => {
+          if (this.locked || Math.abs(event.deltaY) < 28) return;
+          event.preventDefault();
+          this.locked = true;
+          this.go(this.index + (event.deltaY > 0 ? 1 : -1));
+          setTimeout(() => { this.locked = false; }, 650);
+        }, { passive: false });
       }
-
-      setupNavDots() {
-        if (!this.navDots) return;
-        this.navDots.innerHTML = '';
-        for (let i = 0; i < this.totalSlides; i++) {
-          const btn = document.createElement('button');
-          btn.setAttribute('aria-label', `幻灯片 ${i + 1}`);
-          btn.addEventListener('click', () => this.goTo(i));
-          this.navDots.appendChild(btn);
-        }
-        this.dots = this.navDots.querySelectorAll('button');
+      go(next) {
+        const index = Math.max(0, Math.min(next, this.slides.length - 1));
+        const target = this.slides[index];
+        if (!target) return;
+        target.classList.remove("visible");
+        target.scrollIntoView({ behavior: "smooth", block: "start" });
+        this.index = index;
+        this.update();
+        requestAnimationFrame(() => requestAnimationFrame(() => target.classList.add("visible")));
       }
-
-      updateUI() {
-        if (this.progressBar) {
-          const scale = (this.currentIndex + 1) / this.totalSlides;
-          this.progressBar.style.background = `linear-gradient(to right, var(--accent-main) ${scale * 100}%, rgba(232,228,223,0.08) ${scale * 100}%)`;
-        }
-        if (this.dots) {
-          this.dots.forEach((dot, i) => dot.classList.toggle('active', i === this.currentIndex));
-        }
+      update() {
+        this.fill.style.setProperty("--progress", String((this.index + 1) / this.slides.length));
+        Array.from(this.dots.children).forEach((dot, i) => dot.classList.toggle("active", i === this.index));
       }
     }
-
-
-    /* Keyboard shortcut for edit mode */    document.addEventListener('keydown', (e) => {
-      if ((e.key === 'e' || e.key === 'E') && !e.target.isContentEditable) {
-        editor.toggleEditMode();
-      }
-    });
-
-    new SlidePresentation();
+    document.addEventListener("DOMContentLoaded", () => { window.darkSoftGlowPreview = new PreviewDeck(); });
   </script>
 </body>
 </html>
