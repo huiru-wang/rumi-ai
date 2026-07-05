@@ -134,6 +134,26 @@ All form `label` and `options` **must match the user's language**. When the user
 - If the user selects specific documents, use only those as the generation scope.
 - If the user selects all documents, use every available knowledge-base document.
 
+**Question 5 — Content Density（内容密度）** (header: "Density")
+- Type: `select`
+- Options:
+  - `轻量：少文字、多留白、适合演讲展示`
+  - `标准：图文平衡、适合汇报讲解`
+  - `高密度：信息完整、适合培训/复盘/资料留存`
+- If the user explicitly asks for a concise, visual, spacious, or keynote-style deck, set `recommended` to `轻量：少文字、多留白、适合演讲展示`.
+- If the user explicitly asks for a detailed training deck, manual, review document, or leave-behind material, set `recommended` to `高密度：信息完整、适合培训/复盘/资料留存`.
+- Otherwise set `recommended` to `标准：图文平衡、适合汇报讲解`.
+
+Content density affects planning and layout:
+
+| Density | Per-slide content | Layout implication |
+|---------|-------------------|--------------------|
+| 轻量 | 1 main idea + 2-3 short points | Larger visuals, more whitespace, fewer cards |
+| 标准 | 1 main idea + 3-5 points | Balanced text, diagrams, images, and charts |
+| 高密度 | 1 topic + 4-6 points, steps, or examples | Prefer split slides, tables, flows, and structured modules |
+
+Density never overrides viewport fitting. If content does not fit cleanly, split slides instead of shrinking or scrolling.
+
 **When no documents are available and the user has not provided a topic**, the Topic question's custom input is required. Do not proceed with generation until the user provides a concrete topic, outline, or source content.
 
 ### Form Cancellation
@@ -147,16 +167,65 @@ Only disable inline editing when the user explicitly asks for a presentation-onl
 
 ---
 
+## Phase 1.5: Full Content & Asset Gathering
+
+Before you generate the outline, collect the full content and visual materials needed for the whole presentation.
+
+The goal is to collect enough material for the whole presentation, not to perform a later per-slide verification pass. Use the selected topic, purpose, length, content density, and source documents to decide what to retrieve and how deeply to retrieve it.
+
+When source documents are selected:
+
+- Use `rag_search` to gather the content needed to support the full deck before writing the outline.
+- If the user selected specific documents, use the corresponding `doc_id` when searching those documents.
+- Do not prescribe a fixed number of `rag_search` calls. Retrieval depth depends on document count, topic complexity, expected length, and content density.
+- Higher density requires more complete facts, examples, steps, tables, and edge cases; lighter density requires stronger synthesis and fewer points.
+- Prefer document-grounded content over general model knowledge. Do not invent professional facts, data, laws, or case examples that are not in the selected sources or directly provided by the user.
+
+Collect material across these categories:
+
+- Core definitions, background, conclusions, and key arguments
+- Facts, metrics, percentages, dates, timelines, and comparisons
+- Cases, workflows, procedures, risks, tradeoffs, and before/after states
+- Tables, charts, diagrams, screenshots, document images, and other visual assets
+- Source locations that explain where each important fact or asset came from
+
+When no source documents are selected or available, base the deck only on the user's provided topic, outline, or source text. If the user has not provided enough content for a reliable deck, ask for more material before continuing.
+
+### Content & Asset Inventory
+
+Internally organize the gathered material before drafting the outline. You may summarize this inventory in the outline when it helps the user understand scope, but do not turn it into a separate user confirmation gate.
+
+Use this structure:
+
+| Type | Source | Available material | Best use |
+|------|--------|--------------------|----------|
+| text | Document/page/section or user input | Key fact, conclusion, example, or process | Slide topic or supporting point |
+| table | Document/page/section | Important rows, columns, values, or categories | Simplified table, comparison, or chart |
+| chart | Document/page/section | Existing chart or chartable numbers | Recreate as inline SVG chart |
+| image | Document/page/section | Image Markdown/URL, screenshot, diagram, or photo | Use directly if relevant, otherwise create `.img-slot` placeholder |
+
+Image and chart rules:
+
+- Prefer relevant document images, screenshots, and diagrams over generic placeholders.
+- Use a document image only when it directly supports the slide's message.
+- If no suitable image exists, use the standard `.img-slot[data-img-slot]` placeholder with a clear description.
+- If a table or numeric text can be understood faster as a chart, plan an inline SVG chart using the chart rules.
+- Never copy citation markers, source headers, or `来源索引` text into the final HTML.
+
+---
+
 ## Phase 2: Outline Confirmation
 
 Before generating the final HTML presentation, create a text-only Markdown outline and ask the user to confirm it.
 
 **Hard gate:** Do not generate the full HTML presentation and do not call `save_ppt` until the user explicitly confirms the outline.
 
-Use the selected source documents as the retrieval and generation scope:
+The outline must be based on the material gathered in Phase 1.5. Do not draft the outline only from document summaries when ready source documents exist.
+
+Use the selected source documents as the generation scope:
 
 - "All documents" means synthesize across all available knowledge-base documents
-- Specific document selections mean retrieve from and cite only those selected documents
+- Specific document selections mean use gathered material from only those selected documents
 - If no documents are selected, rely on the user's provided topic, outline, or source content
 - Do not imply that unselected documents were used
 
@@ -175,22 +244,25 @@ Output the outline as Markdown in this structure:
 
 预计页数：...
 
+内容密度：...
+
 视觉风格：...
 
 内容来源：...
 
 ### 幻灯片结构
 
-| # | 标题 | 核心内容 | 关键词 | 视觉建议 | 依据/来源 |
-|---|------|----------|--------|----------|-----------|
-| 1 | ... | ... | 关键词1,关键词2,关键词3 | ... | ... |
-| 2 | ... | ... | 关键词1,关键词2,关键词3 | ... | ... |
+| # | 标题 | 核心内容 | 关键词 | 内容密度 | 可用素材 | 视觉建议 | 依据/来源 |
+|---|------|----------|--------|----------|----------|----------|-----------|
+| 1 | ... | ... | 关键词1,关键词2,关键词3 | 轻量/标准/高密度 | 图片/图表/表格/案例/无 | ... | ... |
+| 2 | ... | ... | 关键词1,关键词2,关键词3 | 轻量/标准/高密度 | 图片/图表/表格/案例/无 | ... | ... |
 
 ### 内容取舍说明
 
 - 会重点展开：...
 - 会简略处理：...
 - 暂不纳入：...
+- 素材不足或需用户补充：...
 
 ### 请确认
 
@@ -200,7 +272,7 @@ Output the outline as Markdown in this structure:
 
 #### Keywords 生成规则（重要）
 
-`keywords` 的唯一用途是作为 RAG 检索查询词，从知识库原始文档中召回与该幻灯片相关的段落。生成时必须遵守以下规则：
+`keywords` are preserved in the structured outline for later narration generation, follow-up retrieval, and user-facing traceability. Generate them from the material gathered in Phase 1.5 and follow these rules:
 
 **✅ 必须包含：**
 - 该幻灯片涉及的**具体技术术语、专有名词、API/类名**（如 `ThreadPoolExecutor`、`volatile`、`CountDownLatch`）
@@ -219,7 +291,7 @@ Output the outline as Markdown in this structure:
 | 封面/标题 | 阿里巴巴, Java, 并发, 规范 | 并发处理, 编程规约, 线程安全规范 |
 | 核心要点回顾 | 总结, 回顾, 最佳实践 | ThreadPoolExecutor, 锁粒度, volatile, ConcurrentHashMap |
 
-Keep the outline concise but concrete enough for the user to judge scope, order, and emphasis. Do not call tools in the same assistant message as the outline unless retrieval is needed before writing it.
+Keep the outline concise but concrete enough for the user to judge scope, order, emphasis, density, and visual material usage.
 
 ### Step 2.15: Automatic Chart Decision
 
@@ -272,11 +344,45 @@ During this loop:
 
 ---
 
+## Phase 2.5: Slide Design Briefs
+
+After the user explicitly confirms the outline, create internal slide design briefs before writing HTML.
+
+These briefs translate the confirmed outline and Phase 1.5 material inventory into page-level layout decisions. Do not add another user confirmation gate unless the briefs change the major structure, page count, or section order that the user already approved.
+
+Use this structure:
+
+| # | Slide Goal | Material Used | Layout | Image/Chart Handling | Density Handling |
+|---|------------|---------------|--------|----------------------|------------------|
+| 1 | What the audience should remember | Facts/assets from gathered inventory | Cover / split / flow / comparison / chart / case | Use document image / recreate chart / image slot / none | How selected density is applied |
+
+Brief rules:
+
+- Each slide must have one clear communication goal.
+- Map gathered facts, cases, tables, images, or charts to the slide where they are most useful.
+- Choose layouts from the content shape: process, comparison, timeline, chart, case, table, diagram, or sparse keynote slide.
+- Make image/chart decisions before HTML generation.
+- Use density to decide whether to simplify, split, or structure content; never use density as a reason to cram content.
+
+Do not perform a per-slide RAG verification pass after briefs are written. If you discover that the confirmed outline lacks enough gathered material for a slide, adapt the slide using the existing gathered material or explain the gap before generation if it changes the user's approved scope.
+
+---
+
 ## Phase 3: Build Final Presentation
 
 Generate the final presentation using the last outline explicitly confirmed by the user.
 
-The final presentation must follow the confirmed outline. You may split an overloaded slide into multiple slides for viewport fitting, but do not add or remove major sections without asking the user to confirm an updated outline.
+The final presentation must follow the confirmed outline and the slide design briefs. You may split an overloaded slide into multiple slides for viewport fitting, but do not add or remove major sections without asking the user to confirm an updated outline.
+
+Use only:
+
+- The user's explicit instructions and provided source content
+- The material gathered during Phase 1.5
+- The confirmed outline
+- The slide design briefs
+- The current style template
+
+Do not perform a per-slide RAG verification pass in this phase. Do not add a separate second-pass quality-check phase. Generate directly from the gathered material, confirmed outline, and briefs.
 
 **Before generating, read these supporting files and call the style template tool:**
 
@@ -337,15 +443,31 @@ The `outline` parameter must be a JSON string matching this schema:
   "summary": "PPT的全局摘要（2-3句话概括整个PPT的核心内容和目标）",
   "audience": "目标受众",
   "purpose": "用途",
+  "density": "standard",
   "total_slides": 12,
   "style": "swiss-modern",
+  "material_inventory_summary": "本次PPT使用的主要事实、数据、图片、图表、表格或案例素材摘要",
   "slides": [
     {
       "number": 1,
       "title": "幻灯片标题",
       "key_points": ["要点1", "要点2"],
       "keywords": ["关键词1", "关键词2", "关键词3"],
+      "density": "standard",
       "source_refs": ["doc_id:xxx"],
+      "asset_refs": [
+        {
+          "type": "image",
+          "source": "文档名 p.12",
+          "usage": "作为案例截图"
+        }
+      ],
+      "design_brief": {
+        "goal": "本页要让观众记住的核心信息",
+        "layout": "分栏/流程/对比/图表/案例/封面等",
+        "image_or_chart": "document-image / svg-chart / image-slot / none",
+        "density_handling": "轻量/标准/高密度在本页的处理方式"
+      },
       "notes": "补充说明（可选）"
     }
   ]
@@ -368,9 +490,16 @@ The HTML must be fully self-contained (all CSS/JS inline). Do NOT use terminal c
 
 ### Step 4.2: Confirm to User
 
-Summarize — Tell the user:
-   - style name, slide count
-   - Inline editing: Hover top-left corner or press E to enter edit mode, click any text to edit, Ctrl+S to save
+Summarize in a structured way:
+
+- PPT title
+- Style name
+- Slide count
+- Content density
+- Content sources used
+- Main structure or sections
+- Materials used: document images, recreated charts, tables, cases, or image placeholders
+- Inline editing: Hover top-left corner or press E to enter edit mode, click any text to edit, click image slots to upload/replace images, Ctrl+S to save
 
 ---
 

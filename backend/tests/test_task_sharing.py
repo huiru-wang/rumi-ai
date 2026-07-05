@@ -8,6 +8,11 @@ from src.storage.file_store import FileStore
 from src.storage.providers import LocalProvider
 
 
+class _AllowTestUserRegistry:
+    def is_valid_user_id(self, user_id: str) -> bool:
+        return user_id == "user-test"
+
+
 async def _make_store(tmp_path, monkeypatch):
     db = Database(str(tmp_path / "rumi_ai.db"))
     await db.initialize()
@@ -16,6 +21,7 @@ async def _make_store(tmp_path, monkeypatch):
     workspace = await db.create_workspace("user-test", "Workspace")
     monkeypatch.setattr(routes, "db", db)
     monkeypatch.setattr(routes, "file_store", store)
+    monkeypatch.setattr(routes, "invite_registry", _AllowTestUserRegistry())
     return db, store, workspace["id"]
 
 

@@ -33,7 +33,9 @@ from src.exceptions import (
     ERR_FILE_NOT_FOUND,
     ERR_TASK_NO_FILE,
     ERR_MESSAGE_NOT_FOUND,
+    ERR_INVITE_INVALID,
 )
+from src.invite_registry import InviteRegistry
 from src.limits import (
     MAX_WORKSPACES_PER_USER,
     MAX_DOCUMENTS_PER_WORKSPACE,
@@ -50,6 +52,7 @@ from src.url_utils import (
 )
 
 logger = logging.getLogger(__name__)
+invite_registry = InviteRegistry.from_env()
 
 # Configure root logger for development
 logging.basicConfig(
@@ -85,6 +88,31 @@ async def startup():
 # --- Workspace ---
 
 
+class ClaimInviteRequest(BaseModel):
+    code: str
+
+
+@app.post("/api/invites/claim")
+async def claim_invite(req: ClaimInviteRequest):
+    record = invite_registry.claim(req.code)
+    if not record:
+        raise BizException(ERR_INVITE_INVALID, "邀请码无效或已停用")
+    return success_response({"user_id": record.user_id, "nickname": record.nickname})
+
+
+def _ensure_invited_user(user_id: str):
+    if not invite_registry.is_valid_user_id(user_id):
+        raise BizException(ERR_INVITE_INVALID, "邀请码无效或已停用")
+
+
+async def _get_invited_workspace(workspace_id: str) -> dict:
+    workspace = await db.get_workspace(workspace_id)
+    if not workspace:
+        raise BizException(ERR_WORKSPACE_NOT_FOUND, "工作区不存在")
+    _ensure_invited_user(workspace["user_id"])
+    return workspace
+
+
 class CreateWorkspaceRequest(BaseModel):
     user_id: str
     name: str
@@ -93,6 +121,7 @@ class CreateWorkspaceRequest(BaseModel):
 @app.post("/api/workspaces")
 async def create_workspace(req: CreateWorkspaceRequest):
     logger.info("[API] POST /api/workspaces user_id=%s name=%s", req.user_id, req.name)
+    _ensure_invited_user(req.user_id)
     count = await db.count_workspaces(req.user_id)
     if count >= MAX_WORKSPACES_PER_USER:
         raise BizException(ERR_WORKSPACE_QUOTA, f"每个用户最多创建 {MAX_WORKSPACES_PER_USER} 个工作区，当前已有 {count} 个。")
@@ -107,6 +136,7 @@ async def create_workspace(req: CreateWorkspaceRequest):
 @app.get("/api/workspaces")
 async def list_workspaces(user_id: str):
     logger.info("[API] GET /api/workspaces user_id=%s", user_id)
+    _ensure_invited_user(user_id)
     data = await db.list_workspaces(user_id=user_id)
     return success_response(data)
 
@@ -114,9 +144,7 @@ async def list_workspaces(user_id: str):
 @app.get("/api/workspaces/{workspace_id}")
 async def get_workspace(workspace_id: str):
     logger.info("[API] GET /api/workspaces/%s", workspace_id)
-    workspace = await db.get_workspace(workspace_id)
-    if not workspace:
-        raise BizException(ERR_WORKSPACE_NOT_FOUND, "工作区不存在")
+    workspace = await _get_invited_workspace(workspace_id)
     return success_response(workspace)
 
 
@@ -242,6 +270,7 @@ def _sanitize_ppt_style(style: dict) -> dict:
 @app.patch("/api/workspaces/{workspace_id}/thread")
 async def update_workspace_thread(workspace_id: str, req: UpdateThreadRequest):
     logger.info("[API] PATCH /api/workspaces/%s/thread thread_id=%s", workspace_id, req.thread_id)
+    await _get_invited_workspace(workspace_id)
     await db.update_workspace_thread_id(workspace_id, req.thread_id)
     return success_response(None)
 
@@ -249,6 +278,7 @@ async def update_workspace_thread(workspace_id: str, req: UpdateThreadRequest):
 @app.patch("/api/workspaces/{workspace_id}/config")
 async def update_workspace_config(workspace_id: str, req: UpdateConfigRequest):
     logger.info("[API] PATCH /api/workspaces/%s/config key=%s value=%s", workspace_id, req.key, req.value)
+    await _get_invited_workspace(workspace_id)
     try:
         ext_data = await db.update_workspace_ext_data(workspace_id, req.key, req.value)
     except ValueError as exc:
@@ -304,6 +334,7 @@ async def get_message_detail(thread_id: str, message_id: str):
 @app.delete("/api/workspaces/{workspace_id}")
 async def delete_workspace(workspace_id: str):
     logger.info("[API] DELETE /api/workspaces/%s", workspace_id)
+    await _get_invited_workspace(workspace_id)
     await doc_service.delete_workspace(workspace_id)
     await db.delete_workspace(workspace_id)
     return success_response(None)
@@ -319,6 +350,7 @@ async def upload_document(
     file: UploadFile = File(...),
 ):
     logger.info("[API] POST /api/workspaces/%s/documents filename=%s", workspace_id, file.filename)
+    await _get_invited_workspace(workspace_id)
     doc_count = await db.count_documents(workspace_id)
     if doc_count >= MAX_DOCUMENTS_PER_WORKSPACE:
         raise BizException(ERR_DOCUMENT_QUOTA, f"每个工作区最多上传 {MAX_DOCUMENTS_PER_WORKSPACE} 个文档，当前已有 {doc_count} 个。")
@@ -343,6 +375,7 @@ async def upload_document(
 @app.get("/api/workspaces/{workspace_id}/documents")
 async def list_documents(workspace_id: str):
     logger.info("[API] GET /api/workspaces/%s/documents", workspace_id)
+    await _get_invited_workspace(workspace_id)
     data = await db.list_documents(workspace_id)
     return success_response([_sanitize_document(doc) for doc in data])
 
@@ -350,6 +383,7 @@ async def list_documents(workspace_id: str):
 @app.delete("/api/workspaces/{workspace_id}/documents/{doc_id}")
 async def delete_document(workspace_id: str, doc_id: str):
     logger.info("[API] DELETE /api/workspaces/%s/documents/%s", workspace_id, doc_id)
+    await _get_invited_workspace(workspace_id)
     await doc_service.delete_document(workspace_id, doc_id)
     return success_response(None)
 
@@ -360,6 +394,7 @@ async def delete_document(workspace_id: str, doc_id: str):
 @app.get("/api/workspaces/{workspace_id}/tasks")
 async def list_tasks(workspace_id: str):
     logger.info("[API] GET /api/workspaces/%s/tasks", workspace_id)
+    await _get_invited_workspace(workspace_id)
     data = await db.list_tasks(workspace_id)
     return success_response([_sanitize_task(task) for task in data])
 
@@ -367,6 +402,7 @@ async def list_tasks(workspace_id: str):
 @app.delete("/api/workspaces/{workspace_id}/tasks/{task_id}")
 async def delete_task(workspace_id: str, task_id: str):
     logger.info("[API] DELETE /api/workspaces/%s/tasks/%s", workspace_id, task_id)
+    await _get_invited_workspace(workspace_id)
 
     task = await db.get_task(task_id)
     if not task:
@@ -405,6 +441,7 @@ async def delete_task(workspace_id: str, task_id: str):
 async def save_task_file(workspace_id: str, task_id: str, req: SaveTaskFileRequest):
     """Save updated HTML content back to a PPT task's file."""
     logger.info("[API] PUT /api/workspaces/%s/tasks/%s/file content_len=%d", workspace_id, task_id, len(req.content))
+    await _get_invited_workspace(workspace_id)
     task = await db.get_task(task_id)
     if not task:
         raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
@@ -507,6 +544,7 @@ async def submit_style_extraction(
 ):
     """Upload a PPTX file and start style extraction workflow."""
     logger.info("[API] POST /api/workspaces/%s/style-extraction filename=%s", workspace_id, file.filename)
+    await _get_invited_workspace(workspace_id)
     if not file.filename or not file.filename.lower().endswith(".pptx"):
         raise BizException(ERR_STYLE_EXTRACTION_FORMAT, "仅支持 .pptx 文件")
     style_task_count = await db.count_tasks_by_type(workspace_id, "ppt_style_extraction")
@@ -533,6 +571,7 @@ async def submit_style_extraction(
 async def get_task(workspace_id: str, task_id: str):
     """Get a single task by ID."""
     logger.info("[API] GET /api/workspaces/%s/tasks/%s", workspace_id, task_id)
+    await _get_invited_workspace(workspace_id)
     task = await db.get_task(task_id)
     if not task:
         raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
@@ -543,6 +582,7 @@ async def get_task(workspace_id: str, task_id: str):
 async def delete_style_extraction(workspace_id: str, task_id: str):
     """Cancel running extraction and delete the task."""
     logger.info("[API] DELETE /api/workspaces/%s/style-extraction/%s", workspace_id, task_id)
+    await _get_invited_workspace(workspace_id)
 
     await style_extract_manager.cancel_extraction(task_id)
 

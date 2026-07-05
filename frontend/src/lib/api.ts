@@ -62,6 +62,18 @@ function toWebUrl(pathOrUrl: string): string {
 
 // --- Workspace ---
 
+export interface InviteClaim {
+  user_id: string;
+  nickname: string;
+}
+
+export function claimInvite(code: string): Promise<InviteClaim> {
+  return request("/api/invites/claim", {
+    method: "POST",
+    body: JSON.stringify({ code }),
+  });
+}
+
 export interface Workspace {
   id: string;
   user_id: string;

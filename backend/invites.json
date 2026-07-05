@@ -1,0 +1,165 @@
+{
+  "version": 1,
+  "invites": [
+    {
+      "code": "RUMI-001",
+      "user_id": "cf3cabde-c2f4-480b-816e-9fb73fa7f413",
+      "nickname": "用户01",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-LMSUBNMRECXL",
+      "user_id": "209b4ea9-d829-4400-bfdc-fa3df65e9c46",
+      "nickname": "用户02",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-ILKOQJG3YPV",
+      "user_id": "a9cfe75a-7644-40e8-8a6c-9cccdbac7fdc",
+      "nickname": "用户03",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-TH31BIDM7BM",
+      "user_id": "565c079e-4bea-4332-9aee-ad00eeecff51",
+      "nickname": "用户04",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-WPBOJOTWE1NQ",
+      "user_id": "f2c49e0b-1864-425d-8550-1fd6c58d0450",
+      "nickname": "用户05",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-1KUNUMN44DKU",
+      "user_id": "7f227800-c218-4020-87ae-c3a255342c28",
+      "nickname": "用户06",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-FNTH2IDVDANE",
+      "user_id": "206a839a-3f2d-4903-8da7-34465e9c0f54",
+      "nickname": "用户07",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-MRD8GG9VU5G",
+      "user_id": "1d102850-8807-4ca5-84b8-b4efe06ffe6d",
+      "nickname": "用户08",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-3DLVIFLZUONL",
+      "user_id": "862c49f9-7100-48d9-8ffe-fe654b68521a",
+      "nickname": "用户09",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-UROA4107UY1",
+      "user_id": "a93bea70-9275-434c-9ea1-2cbef269e7cf",
+      "nickname": "用户10",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-P3CGRQONFCU6",
+      "user_id": "03b1288b-1cb3-4a71-b64b-ee5db99cbecb",
+      "nickname": "用户11",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-M75HSS81F4JQ",
+      "user_id": "cbb99a8e-24db-44ac-b5a3-9370426c6347",
+      "nickname": "用户12",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-CZH8OBJ8CNB",
+      "user_id": "e705e15f-b0b9-497d-92b0-6b8e2d1d29af",
+      "nickname": "用户13",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-ZXVDHDJUK12D",
+      "user_id": "9dd80629-7afb-4583-ab70-393a0af56b42",
+      "nickname": "用户14",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-J7YZIXFEGBRL",
+      "user_id": "274a45ce-a144-4cf1-94e8-20a7a15a9a95",
+      "nickname": "用户15",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-KGFNLMG17XS",
+      "user_id": "f6b74308-cde4-4dcd-a04c-d3cbfa0669e4",
+      "nickname": "用户16",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-QFRSBEXMRAV",
+      "user_id": "54c6b15b-96b3-487a-8b56-41a6fb11d7fc",
+      "nickname": "用户17",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-AVYQT1VVAWLS",
+      "user_id": "05c25d0c-8d57-4d17-9e99-082f89f6bea6",
+      "nickname": "用户18",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-IMSNLM4PTQYR",
+      "user_id": "99e5ba9a-14e2-4276-9175-2e83315ed75b",
+      "nickname": "用户19",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    },
+    {
+      "code": "RUMI-3G5P5GV7P4T6",
+      "user_id": "585b6aa0-9813-467f-b187-fd6bd7cf23a8",
+      "nickname": "用户20",
+      "enabled": true,
+      "note": "",
+      "expires_at": null
+    }
+  ]
+}
