@@ -200,7 +200,7 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
 
       {/* Document List */}
       <div
-        className={`flex-1 overflow-y-auto p-3 transition-colors ${dragOver ? "bg-accent/5" : ""}`}
+        className={`flex-1 overflow-y-auto p-3 transition-colors hover:overflow-visible ${dragOver ? "bg-accent/5" : ""}`}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
         onDrop={handleDrop}
@@ -257,6 +257,10 @@ interface DocumentItemProps {
 }
 
 function DocumentItem({ document, onDelete }: DocumentItemProps) {
+  const [summaryTooltip, setSummaryTooltip] = useState<{
+    top: number;
+    left: number;
+  } | null>(null);
   const statusConfig =
     STATUS_CONFIG[document.status] ??
     STATUS_CONFIG.error;
@@ -283,6 +287,7 @@ function DocumentItem({ document, onDelete }: DocumentItemProps) {
       : document.summary
         ? `${document.summary.slice(0, 40)}...`
         : statusConfig.label;
+  const showSummaryTooltip = !!document.summary && !isActive && document.status !== "error";
 
   return (
     <div className="group flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/50">
@@ -300,9 +305,33 @@ function DocumentItem({ document, onDelete }: DocumentItemProps) {
               }`}
           />
         </div>
-        <p className="mt-0.5 text-[10px] text-muted-foreground">
-          {fileTypeLabel} · {detail}
-        </p>
+        <div
+          className="mt-0.5"
+          onMouseEnter={(event) => {
+            if (!showSummaryTooltip) return;
+            const rect = event.currentTarget.getBoundingClientRect();
+            setSummaryTooltip({
+              top: rect.bottom + 6,
+              left: Math.min(rect.left, window.innerWidth - 320),
+            });
+          }}
+          onMouseLeave={() => setSummaryTooltip(null)}
+        >
+          <p className="text-[10px] text-muted-foreground">
+            {fileTypeLabel} · {detail}
+          </p>
+          {showSummaryTooltip && summaryTooltip && (
+            <div
+              className="pointer-events-none fixed z-[9999] w-72 rounded-md border border-border bg-background px-3 py-2 text-xs leading-relaxed text-foreground shadow-2xl"
+              style={{
+                top: summaryTooltip.top,
+                left: summaryTooltip.left,
+              }}
+            >
+              {document.summary}
+            </div>
+          )}
+        </div>
         {isActive && estimateText && (
           <div className="mt-0.5 flex items-center gap-1 text-[10px] text-muted-foreground">
             <span>{estimateText}</span>
