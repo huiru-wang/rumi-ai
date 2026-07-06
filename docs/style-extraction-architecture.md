@@ -1,6 +1,6 @@
 # PPT 风格提取架构
 
-风格提取把用户上传的 `.pptx` 转成可复用的 PPT 风格模板。当前实现是 FastAPI 后台任务，不经过主 Agent；任务结果可以保存为 `ppt_style` 表中的用户自定义风格，后续被 `get_style_template` 工具用于 PPT 生成。
+风格提取把用户上传的 `.pptx` 转成可复用的 PPT 风格模板。当前实现仍由 FastAPI 后台任务驱动，但风格模板生成与预览 HTML 生成已经封装为一个独立的 LangGraph pipeline；任务结果可以保存为 `ppt_style` 表中的用户自定义风格，后续被 `get_style_template` 工具用于 PPT 生成。
 
 ## 1. 总览
 
@@ -16,9 +16,10 @@
 | 文件 | 职责 |
 |------|------|
 | `backend/src/managers/style_extract_manager.py` | 风格提取工作流、任务进度、文件迁移、自定义风格保存 |
+| `backend/src/agent/style_extract_graph.py` | 风格提取 LangGraph pipeline，负责资产盘点、布局盘点、风格模板生成/校验/修复、预览 HTML 生成/校验/修复 |
 | `backend/src/parsers/pptx_parser.py` | 直接解析 PPTX ZIP/XML，输出 Markdown 结构报告和媒体文件 |
 | `backend/src/managers/prompts/style_extract_prompt.md` | 根据 PPTX 结构报告生成风格模板 |
-| `backend/src/managers/prompts/generate_cover_html_prompt.md` | 根据风格模板生成预览 HTML |
+| `backend/src/managers/prompts/generate_cover_html_prompt.md` | 根据风格模板生成完整多页只读预览 HTML |
 | `backend/src/api/routes.py` | API、预览代理、资源代理、thumbnail 处理 |
 | `frontend/src/components/config/style-extraction-dialog.tsx` | 前端进度、预览、保存 |
 
@@ -67,13 +68,19 @@ flowchart TB
   Task --> SavePPTX["保存源 PPTX 到 workspace/style/{task_id}"]
   SavePPTX --> Parse["pptx_parser.parse_pptx_to_markdown"]
   Parse --> UploadMedia["上传 resource 图片"]
-  UploadMedia --> Vision{"OSS 公网 URL + VISION_MODEL?"}
-  Vision -->|是| AnalyzeImage["分析背景图，生成结构化描述"]
-  Vision -->|否| ManifestOnly["只记录资源 URL"]
-  AnalyzeImage --> StyleLLM["LLM 生成 style_description"]
-  ManifestOnly --> StyleLLM
-  StyleLLM --> PreviewLLM["LLM 生成 preview.html"]
-  PreviewLLM --> SavePreview["保存 preview.html"]
+  UploadMedia --> Manifest["生成背景图资源 manifest"]
+  Manifest --> Vision{"资源可访问 + VISION_MODEL?"}
+  Vision -->|是| AnalyzeImage["分析关键图片资源"]
+  Vision -->|否| ManifestOnly["只记录资源 URL 和使用页"]
+  AnalyzeImage --> Graph["style_extract_graph"]
+  ManifestOnly --> Graph
+  Graph --> AssetInv["asset_inventory"]
+  AssetInv --> LayoutInv["layout_inventory"]
+  LayoutInv --> StyleLLM["generate_style"]
+  StyleLLM --> ValidateStyle["validate_style / repair_style"]
+  ValidateStyle --> PreviewLLM["generate_preview"]
+  PreviewLLM --> ValidatePreview["validate_preview / repair_preview"]
+  ValidatePreview --> SavePreview["保存 preview.html"]
   SavePreview --> Complete["task completed"]
   Complete --> SaveStyle["保存为 ppt_style custom"]
 ```
@@ -110,12 +117,13 @@ user/{user_id}/workspace/{workspace_id}/style/{task_id}/
     └── image*.png
 ```
 
-`StyleExtractManager` 会从 Markdown 中识别背景图片：
+`StyleExtractManager` 当前只从 Markdown 中识别背景图片作为风格资产：
 
 ```text
 ## 第 1 页
 ### 背景
 背景图片： `../media/image1.png`
+
 ```
 
 然后构造 `resource_manifest`：
@@ -126,7 +134,9 @@ user/{user_id}/workspace/{workspace_id}/style/{task_id}/
     "filename": "image1.png",
     "url": "/api/tasks/{task_id}/style-resource/image1.png",
     "used_in_slides": [1],
-    "description": {
+      "usage_type": "background",
+      "usage_types": ["background"],
+      "description": {
       "style": "...",
       "visual_theme": "...",
       "color_tone": "...",
@@ -138,20 +148,32 @@ user/{user_id}/workspace/{workspace_id}/style/{task_id}/
 ]
 ```
 
+普通图片、图标、装饰图形暂不进入 `resource_manifest`，也不会调用视觉模型；它们只保留在 PPTX 解析报告中作为结构参考。
+
 视觉分析只在同时满足以下条件时执行：
 
 - 当前 provider 可提供可访问 URL。
 - 配置了 `VISION_MODEL`。
 - 图片 URL 是 `http://` 或 `https://`。
 
-最多分析前 5 张背景图。视觉分析失败不会让任务失败，manifest 仍保留资源 URL。
+视觉分析只针对背景图执行。视觉分析失败不会让任务失败，manifest 仍保留背景图资源 URL。
 
 ## 6. LLM 生成
 
-风格提取使用文本模型 `SUMMARIZATION_MODEL` 两次：
+风格提取使用文本模型 `SUMMARIZATION_MODEL`，通过 `backend/src/agent/style_extract_graph.py` 运行独立 LangGraph pipeline：
 
-1. `build_style_description_prompt(markdown_text)`：生成带 YAML frontmatter 的 Markdown 风格模板。
-2. `build_preview_html_prompt(style_description, resource_base_url, resource_manifest)`：生成完整预览 HTML。
+1. `asset_inventory` 节点把 `resource_manifest` 汇总成模型可读的视觉资产盘点。
+2. `layout_inventory` 节点从 Markdown 生成页面类型和布局线索盘点。
+3. `generate_style` 节点调用 `build_style_description_prompt(enriched_markdown)`，生成带 YAML frontmatter 的 Markdown 风格模板。
+4. `validate_style` 节点校验 frontmatter、`page_layouts`、固定页面类型中文展示名、`section_policy` 等结构要求；失败时 `repair_style` 最多修复一次。
+5. `generate_preview` 节点调用 `build_preview_html_prompt(style_description, resource_base_url, resource_manifest)`，生成完整多页只读预览 HTML。
+6. `validate_preview` 节点校验 `<!DOCTYPE html>`、只读标记、`.slide`、启用页面类型覆盖、`data-page-type`、入场动画等；失败时 `repair_preview` 最多修复一次。
+
+校验结果用于驱动修复和记录 warning；`StyleExtractManager` 不再用最终校验结果阻断任务保存。模型输出问题优先通过 prompt 约束优化，而不是在代码中硬编码补齐风格模板。
+
+FastAPI 后台任务仍负责 PPTX 保存、PPTX 解析、图片资源上传、进度更新、preview.html 保存和自定义风格迁移。当前 graph 暂不暴露为 `langgraph.json` 中的服务图。
+
+后续优化可以继续增强节点质量，例如把 `asset_inventory` 和 `layout_inventory` 改为模型参与的结构化输出，或增加更细的业务词污染检测、资源 URL 可达性检查和视觉截图检查。
 
 风格模板期望格式：
 
@@ -168,7 +190,7 @@ description: 深蓝商务风格，卡片式布局...
 
 `_parse_frontmatter()` 会解析 `name`、`name_en`、`description`，正文作为 `style_description`。`name_en` 会被清洗成 kebab-case；如果不可用，会按中文名哈希生成 fallback。
 
-预览 HTML 会去掉 LLM 可能输出的 Markdown code fence 后保存为 `preview.html`。
+预览 HTML 会去掉 LLM 可能输出的 Markdown code fence，并在通过 graph 校验后保存为 `preview.html`。
 
 ## 7. 预览与资源代理
 
@@ -241,7 +263,7 @@ PPT 生成时主 Agent 使用 `get_style_template` 工具读取当前工作区�
 
 ## 11. 开发注意
 
-- 风格提取是 FastAPI 后台任务，不要把它接入主 LangGraph graph，除非明确要变成 Agent 工具。
+- 风格提取是 FastAPI 后台任务，LLM 生成阶段使用独立 `style_extract_graph`；不要把它接入主对话 Agent graph，除非明确要变成 Agent 工具。
 - 新增 result_data 字段时同步检查 `_sanitize_result_data()`，避免泄漏存储路径。
 - 本地模式和 OSS 模式都要通过 API 代理访问预览资源，不要把 provider URL 持久化给前端。
 - 保存自定义风格时必须迁移资源并改写 URL，否则后续删除 workspace task 会导致风格资源失效。

@@ -139,9 +139,12 @@ description: 以深蓝为主调的正式商务风格，卡片式信息分区，�
 - 占位符命名
 - 文本颜色规则
 
-同时必须在「## 4. Layout Grammar — 布局语法」开头输出标准化能力图，格式如下：
+同时必须在「## 4. Layout Grammar — 布局语法」开头输出标准化能力图。这个能力图是风格模板的必需内容，缺少 `page_layouts` 或 `section_policy` 时，输出视为不可用。
 
-```yaml
+注意：能力图要作为普通 Markdown 正文直接输出，**不要**放进 ```yaml 或任何代码块。
+
+标准化能力图必须包含以下键名和五个固定页面类型：
+
 page_layouts:
   cover:
     enabled: true
@@ -179,9 +182,16 @@ section_policy:
   consistency:
     - if section is used for one peer topic, use it for all peer topics
     - do not create a section page for one peer topic while another peer topic has no section page
-```
 
 `layout_variant` 的 ID 必须使用 `<page_type>.<semantic_name>`，例如 `content.split_text_visual`。`name` 必须是中文布局名，例如「左文右图型」。如果原 PPT 没有目录页或章节页，对应页面类型必须保留但设置 `enabled: false`，不要编造不存在的页面类型。
+
+输出前必须确认：
+
+- `## 4. Layout Grammar — 布局语法` 下第一段就是 `page_layouts:`。
+- `cover / agenda / section / content / closing` 五个键都存在。
+- 每个页面类型都有中文 `display_name`。
+- `section_policy:` 紧跟在 `page_layouts` 后方。
+- 不要用自然语言替代标准化能力图。
 
 禁止罗列精确坐标（pt/px）。使用相对位置描述：顶部、底部、左侧、居中、分栏、网格、卡片阵列等。百分比仅作为「参考」，不是约束。
 

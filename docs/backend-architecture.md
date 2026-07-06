@@ -217,7 +217,7 @@ uploaded -> parsing -> parsed -> chunking -> indexing -> summarizing -> ready
 
 ## 9. 风格提取
 
-PPTX 风格提取由 FastAPI 后台任务执行，不经过主 Agent 工具链。核心类是 `StyleExtractManager`，入口是 `/api/workspaces/{workspace_id}/style-extraction`。
+PPTX 风格提取由 FastAPI 后台任务执行，不经过主对话 Agent 工具链。核心类是 `StyleExtractManager`，入口是 `/api/workspaces/{workspace_id}/style-extraction`。其中资产盘点、布局盘点、风格模板生成/校验/修复、预览 HTML 生成/校验/修复封装在 `backend/src/agent/style_extract_graph.py` 的独立 LangGraph pipeline 中，暂不作为 `langgraph.json` 服务图暴露。
 
 状态流：
 

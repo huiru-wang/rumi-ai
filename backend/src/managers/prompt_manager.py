@@ -131,17 +131,19 @@ class PromptManager:
                 "",
                 "=== 视觉资产（资源清单） ===",
                 "",
-                "以下资源**必须**用于封面页背景（按「使用建议」应用）。",
+                "以下资源可用于完整风格预览。必须按 page_layouts 和「使用建议」判断适合的页面类型，不要堆砌资源。",
                 "",
-                "| 文件 | URL | 使用建议 |",
-                "|------|-----|----------|",
+                "| 文件 | 类型 | 使用页 | URL | 使用建议 |",
+                "|------|------|--------|-----|----------|",
             ]
             for res in resource_manifest:
                 fn = res.get("filename", "")
                 url = res.get("url", "")
+                usage_type = res.get("usage_type", "image")
+                slides = ", ".join(str(s) for s in res.get("used_in_slides", [])) or "-"
                 desc = res.get("description", {})
                 notes = desc.get("usage_notes", "") if isinstance(desc, dict) else ""
-                lines.append(f"| {fn} | `{url}` | {notes} |")
+                lines.append(f"| {fn} | {usage_type} | {slides} | `{url}` | {notes} |")
             parts.extend(lines)
         else:
             parts.extend([

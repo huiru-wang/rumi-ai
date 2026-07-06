@@ -437,8 +437,6 @@ def render_shapes(shapes: list) -> str:
     ]
     for sh in shapes:
         kind = sh.get("kind", "")
-        if kind == "pic":
-            continue
         x = sh.get("x", "")
         y = sh.get("y", "")
         w = sh.get("width", "")

@@ -1,7 +1,6 @@
-"""Style extraction manager: parse PPTX → LLM style template → LLM preview HTML."""
+"""Style extraction manager: parse PPTX -> LLM style template -> LLM preview HTML."""
 
 import asyncio
-import hashlib
 import json
 import logging
 import os
@@ -12,6 +11,7 @@ from pathlib import Path
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
+from src.agent.style_extract_graph import create_style_extract_graph, resolve_style_name_en
 from src.managers.prompt_manager import PromptManager
 from src.storage.database import Database
 from src.storage.file_store import FileStore
@@ -23,94 +23,31 @@ from src.parsers.pptx_parser import parse_pptx_to_markdown as _parse_pptx_to_mar
 
 
 # ============================================================
-# Frontmatter Parsing
-# ============================================================
-def _parse_frontmatter(llm_output: str) -> dict:
-    """Parse YAML frontmatter from LLM-generated Markdown.
-
-    Expected format (pure Markdown, no code fence):
-    ---
-    name: 蓝色商务卡片风
-    name_en: blue-business-card
-    description: 深蓝商务风格，卡片式布局...
-    ---
-
-    # 蓝色商务卡片风
-    ...
-
-    Returns dict with keys: name, name_en, description, style_description (body only, no frontmatter)
-    """
-    output = llm_output.strip()
-
-    # 直接按 --- 分隔符解析 frontmatter
-    if output.startswith("---"):
-        rest = output[3:].lstrip("\n")
-        end_idx = rest.find("\n---")
-        if end_idx != -1:
-            frontmatter_text = rest[:end_idx]
-            body = rest[end_idx + 4:].lstrip("\n")
-
-            name = ""
-            name_en = ""
-            description = ""
-
-            for line in frontmatter_text.split("\n"):
-                line = line.strip()
-                if line.startswith("name:"):
-                    val = line[len("name:"):].strip().strip("\"'")
-                    if "name_en" not in line[:7]:
-                        name = val
-                elif line.startswith("name_en:"):
-                    name_en = line[len("name_en:"):].strip().strip("\"'")
-                elif line.startswith("description:"):
-                    description = line[len("description:"):].strip().strip("\"'")
-
-            return {
-                "name": name,
-                "name_en": name_en,
-                "description": description,
-                "style_description": body.strip(),
-            }
-
-    logger.warning("[StyleExtract] no YAML frontmatter found in LLM output")
-    logger.debug("[StyleExtract] raw output (first 500 chars): %s", output[:500])
-    return {
-        "name": "",
-        "name_en": "",
-        "description": "",
-        "style_description": output,
-    }
-
-
-def _resolve_style_name_en(name_en: str, name: str) -> str:
-    """Ensure name_en is valid kebab-case. Generate fallback if needed."""
-    if name_en:
-        name_en = re.sub(r"[^a-zA-Z0-9\s-]", "", name_en).strip().lower()
-        name_en = re.sub(r"\s+", "-", name_en)
-
-    if not name_en or not re.search(r"[a-z]", name_en):
-        fallback = name or "unnamed"
-        short_hash = hashlib.md5(fallback.encode()).hexdigest()[:6]
-        name_en = f"style-{short_hash}"
-
-    return name_en
-
-
-# ============================================================
 # Resource Analysis Helpers
 # ============================================================
-def _extract_background_images(markdown_text: str) -> list[dict]:
-    """Extract background image filenames and their slide numbers from Markdown.
+def _extract_visual_resources(markdown_text: str, media_files: dict[str, str] | None = None) -> list[dict]:
+    """Extract background image filenames and their slide usage from Markdown.
 
     Parses patterns like:
         ## 第 1 页
         ### 背景
         背景图片： `../media/Slide-1-image-1.png`
 
-    Returns list of {"filename": "Slide-1-image-1.png", "slides": [1]}
+    Ordinary picture/icon resources are intentionally ignored at this stage.
+    Returns list of {"filename": "image.png", "slides": [1], "usage_type": "background"}.
     """
     current_slide = None
-    bg_map: dict[str, list[int]] = {}
+    resource_map: dict[str, dict] = {}
+
+    def record(filename: str):
+        if not filename:
+            return
+        item = resource_map.setdefault(
+            filename,
+            {"filename": filename, "slides": set(), "usage_types": {"background"}},
+        )
+        if current_slide is not None:
+            item["slides"].add(current_slide)
 
     for line in markdown_text.split("\n"):
         line_stripped = line.strip()
@@ -122,12 +59,19 @@ def _extract_background_images(markdown_text: str) -> list[dict]:
         bg_match = re.search(r"背景图片[：:]\s*`([^`]+)`", line_stripped)
         if bg_match and current_slide is not None:
             path = bg_match.group(1)
-            filename = path.split("/")[-1]
-            if filename not in bg_map:
-                bg_map[filename] = []
-            bg_map[filename].append(current_slide)
+            record(path.split("/")[-1])
 
-    return [{"filename": fn, "slides": slides} for fn, slides in bg_map.items()]
+    resources = []
+    for filename in sorted(resource_map):
+        item = resource_map[filename]
+        usage_types = sorted(item["usage_types"])
+        resources.append({
+            "filename": filename,
+            "slides": sorted(item["slides"]),
+            "usage_type": "background",
+            "usage_types": usage_types,
+        })
+    return resources
 
 
 def _build_resource_section(resource_manifest: list[dict]) -> str:
@@ -135,7 +79,7 @@ def _build_resource_section(resource_manifest: list[dict]) -> str:
     lines = [
         "## 资源描述",
         "",
-        "以下是从 PPTX 中提取的图片资源及其视觉分析。生成风格模板时，必须保留图片的 URL 和使用说明。",
+        "以下是从 PPTX 中提取的视觉资源及其视觉分析。生成风格模板时，必须判断哪些资源应进入风格模板或预览 HTML。",
         "",
     ]
 
@@ -150,6 +94,8 @@ def _build_resource_section(resource_manifest: list[dict]) -> str:
         if slides:
             slide_str = ", ".join(str(s) for s in slides)
             lines.append(f"- **使用页面**：第 {slide_str} 页")
+        if res.get("usage_type"):
+            lines.append(f"- **资源类型**：{res['usage_type']}")
         if desc.get("style"):
             lines.append(f"- **风格**：{desc['style']}")
         if desc.get("visual_theme"):
@@ -255,92 +201,81 @@ class StyleExtractManager:
 
             logger.info(f"[StyleExtract] PARSED task={task_id} ppt_markdown={markdown_text} media_files={media_files}")
 
-            # --- Step 1.5: Analyze background images + Build resource manifest ---
+            # --- Step 1.5: Build background resource manifest ---
             resource_manifest: list[dict] = []
-            if resource_base_url and self._vision_llm:
-                bg_images = _extract_background_images(markdown_text)
-                if bg_images:
-                    for bg in bg_images[:5]:  # 最多分析 5 张
-                        # manifest 直接存 API 代理 URL（浏览器可直接访问）
-                        img_url = build_style_extraction_resource_url(task_id, bg['filename'])
-                        # 视觉分析使用签名 URL（私有 bucket 需临时授权）
-                        img_key = f"{resource_prefix}/resource/{bg['filename']}"
+            visual_resources = _extract_visual_resources(markdown_text, media_files)
+            if visual_resources:
+                logger.info("[StyleExtract] background resources found: %d", len(visual_resources))
+                for res in visual_resources:
+                    filename = res["filename"]
+                    img_url = build_style_extraction_resource_url(task_id, filename)
+                    analysis = None
+                    if self._vision_llm:
+                        img_key = f"{resource_prefix}/resource/{filename}"
                         signed_url = self.file_store._provider.get_url(img_key)
-                        analysis = await self._analyze_image_resource(signed_url, bg['filename'])
-                        # 无论视觉分析是否成功，都加入 manifest（图片已在 OSS）
-                        resource_manifest.append({
-                            "filename": bg["filename"],
-                            "url": img_url,
-                            "used_in_slides": bg["slides"],
-                            "description": analysis or {},
-                        })
+                        analysis = await self._analyze_image_resource(signed_url, filename)
                         if analysis:
-                            logger.info(f"[StyleExtract] image analysis: file={bg['filename']} analysis={analysis}")
-                        else:
-                            logger.warning("[StyleExtract] vision FAILED or SKIPPED: %s (url=%s), added with empty description", bg["filename"], img_url)
-
-                    if resource_manifest:
-                        resource_section = _build_resource_section(resource_manifest)
-                        markdown_text = markdown_text.rstrip() + "\n\n" + resource_section
-                        logger.info("[StyleExtract] appended resource section: %d resources, md_len=%d", len(resource_manifest), len(markdown_text))
-                else:
-                    logger.info("[StyleExtract] no background images found in markdown")
-            elif media_files:
-                # No vision model or local mode: build manifest with URLs only
-                bg_images = _extract_background_images(markdown_text)
-                logger.info("[StyleExtract] fallback mode (no vision/local): %d bg images, resource_base_url=%s", len(bg_images), bool(resource_base_url))
-                for bg in bg_images[:5]:
-                    img_url = build_style_extraction_resource_url(task_id, bg['filename'])
+                            logger.info("[StyleExtract] image analysis: file=%s analysis=%s", filename, analysis)
                     resource_manifest.append({
-                        "filename": bg["filename"],
+                        "filename": filename,
                         "url": img_url,
-                        "used_in_slides": bg["slides"],
-                        "description": {},
+                        "used_in_slides": res["slides"],
+                        "usage_type": res.get("usage_type", "image"),
+                        "usage_types": res.get("usage_types", []),
+                        "description": analysis or {},
                     })
 
-            # --- Step 2: LLM — Style Template ---
+                resource_section = _build_resource_section(resource_manifest)
+                markdown_text = markdown_text.rstrip() + "\n\n" + resource_section
+                logger.info("[StyleExtract] appended resource section: %d resources, md_len=%d", len(resource_manifest), len(markdown_text))
+            else:
+                logger.info("[StyleExtract] no background resources found")
+
+            # --- Step 2-3: Agent Graph — Style Template + Preview HTML ---
             await self._check_cancel(cancel_event)
             await self._update_progress(task_id, "analyzing_style", pptx_filename=pptx_filename)
 
-            style_desc_prompt = self._prompt_manager.build_style_description_prompt(markdown_text)
-            raw_style_output = await self._llm_invoke(
-                self._text_llm,
-                style_desc_prompt,
-                "请根据以上 PPTX 结构化解析报告，生成风格模版。",
-            )
+            async def _before_preview(state: dict):
+                await self._check_cancel(cancel_event)
+                await self._update_progress(
+                    task_id,
+                    "generating_preview",
+                    pptx_filename=pptx_filename,
+                    description=state.get("description", ""),
+                    style_description=state.get("style_description", ""),
+                    style_name=state.get("style_name", ""),
+                    style_name_en=state.get("style_name_en", ""),
+                )
 
-            # Parse frontmatter for name/name_en/description
-            parsed = _parse_frontmatter(raw_style_output)
-            style_name = parsed["name"] or "未命名风格"
-            style_name_en = _resolve_style_name_en(parsed["name_en"], style_name)
-            description = parsed["description"]
-            style_description = parsed["style_description"]
+            style_graph = create_style_extract_graph(
+                self._text_llm,
+                self._prompt_manager,
+                on_before_preview=_before_preview,
+            )
+            graph_result = await style_graph.ainvoke({
+                "markdown_text": markdown_text,
+                "resource_base_url": resource_base_url,
+                "resource_manifest": resource_manifest,
+            })
+
+            raw_style_output = graph_result.get("raw_style_output", "")
+            style_name = graph_result.get("style_name") or "未命名风格"
+            style_name_en = graph_result.get("style_name_en") or resolve_style_name_en("", style_name)
+            description = graph_result.get("description", "")
+            style_description = graph_result.get("style_description", "")
+            preview_html = graph_result.get("preview_html", "")
+            style_validation_errors = graph_result.get("style_validation_errors", [])
+            preview_validation_errors = graph_result.get("preview_validation_errors", [])
+            if style_validation_errors or preview_validation_errors:
+                logger.warning(
+                    "[StyleExtract] graph validation warnings task=%s style=%s preview=%s",
+                    task_id,
+                    style_validation_errors,
+                    preview_validation_errors,
+                )
 
             logger.info(f"[StyleExtract] STYLE_TEMPLATE task={task_id} style_template={raw_style_output}")
-
-            # --- Step 3: LLM — Preview HTML ---
-            await self._check_cancel(cancel_event)
-            await self._update_progress(
-                task_id, "generating_preview",
-                pptx_filename=pptx_filename,
-                description=description,
-                style_description=style_description,
-                style_name=style_name,
-                style_name_en=style_name_en,
-            )
-
-            preview_html_prompt = self._prompt_manager.build_preview_html_prompt(
-                style_description, resource_base_url, resource_manifest
-            )
-            preview_html = await self._llm_invoke(
-                self._text_llm,
-                preview_html_prompt,
-                "请严格按照以上风格模版，生成完整的预览 HTML 文件。",
-            )
             logger.info(f"[StyleExtract] PREVIEW_HTML task={task_id}")
-
-            # Clean up markdown code fences from LLM output
-            preview_html = self._strip_code_fence(preview_html)
 
             # --- Step 4: Save & Complete ---
             await self._check_cancel(cancel_event)
@@ -607,30 +542,6 @@ class StyleExtractManager:
     async def _check_cancel(self, event: asyncio.Event):
         if event.is_set():
             raise _CancelledError()
-
-    async def _llm_invoke(self, llm: ChatOpenAI, system_prompt: str, user_message: str) -> str:
-        """调用指定 LLM 并返回文本内容。"""
-        messages = [
-            SystemMessage(content=system_prompt),
-            HumanMessage(content=user_message),
-        ]
-        response = await llm.ainvoke(messages)
-        return response.content
-
-    @staticmethod
-    def _strip_code_fence(text: str) -> str:
-        """从 LLM 输出中提取纯 HTML 内容。
-
-        Handles three cases:
-        1. ```html ... ``` code fence
-        2. ``` ... ``` code fence
-        3. No code fence (just strip)
-        """
-        text = text.strip()
-        fence_match = re.search(r"```(?:html)?\s*\n?([\s\S]*?)\n?\s*```", text)
-        if fence_match:
-            return fence_match.group(1).strip()
-        return text
 
 
 class _CancelledError(Exception):

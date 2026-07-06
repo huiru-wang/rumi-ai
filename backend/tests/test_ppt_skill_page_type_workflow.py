@@ -149,8 +149,10 @@ def test_prompt_manager_appends_shared_page_layout_contract() -> None:
     assert "用户可见大纲必须使用中文页面类型" in prompt
 
 
-def test_cover_preview_prompt_prefers_normalized_cover_layout() -> None:
+def test_style_preview_prompt_uses_normalized_page_layouts() -> None:
     text = _read(GENERATE_COVER_PROMPT)
 
     assert "page_layouts.cover" in text
-    assert "cover.*" in text
+    assert "page_layouts.content" in text
+    assert "data-page-type" in text
+    assert "禁止生成单页封面预览" in text
