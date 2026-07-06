@@ -10,6 +10,7 @@
 - [ ] 消息发送到在对话框显示存在明显可以感知的延时
 - [ ] web_search支持
 - [ ] 用户问题反馈入口
+- [ ] langgraph的state管理切换到自主数据库backend/.langgraph_api/
 
 ### PPT
 

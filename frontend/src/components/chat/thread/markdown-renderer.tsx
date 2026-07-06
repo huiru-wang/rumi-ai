@@ -6,6 +6,7 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { oneDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import remarkGfm from "remark-gfm";
 import { CITE_HREF_PREFIX, replaceCitationMarkers } from "./citations";
+import { normalizeMarkdownAssetUrl } from "./markdown-url";
 
 // ============================================================
 // CitationBadge
@@ -83,11 +84,18 @@ export function MarkdownWithCitations({ text }: { text: string }) {
               );
           }
           return (
-            <a href={href} {...rest}>
+            <a href={normalizeMarkdownAssetUrl(href)} {...rest}>
               {children}
             </a>
           );
         },
+        img: ({ src, alt, ...rest }) => (
+          <img
+            src={typeof src === "string" ? normalizeMarkdownAssetUrl(src) : src}
+            alt={alt ?? ""}
+            {...rest}
+          />
+        ),
         table: ({ children, ...rest }) => (
           <div className="overflow-x-auto">
             <table className="w-max min-w-full" {...rest}>

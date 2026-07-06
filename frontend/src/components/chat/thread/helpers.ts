@@ -65,6 +65,17 @@ export function extractToolCalls(message: any): ExtractedToolCall[] {
   return [];
 }
 
+export function buildToolResultMap(messages: any[]): Map<string, any> {
+  const resultMap = new Map<string, any>();
+  for (const message of messages) {
+    const type = message?._getType?.() || message?.type || message?.role;
+    if (type !== "tool") continue;
+    const callId = getToolCallId(message.tool_call_id);
+    if (callId) resultMap.set(callId, message);
+  }
+  return resultMap;
+}
+
 // ============================================================
 // Serialization
 // ============================================================

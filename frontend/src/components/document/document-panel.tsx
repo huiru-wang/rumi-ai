@@ -22,6 +22,7 @@ import {
   markUploadFailed,
   replaceUploadingDocument,
 } from "./document-upload-state";
+import { keepDocumentProgressMonotonic } from "./document-progress-display";
 
 interface DocumentPanelProps {
   workspaceId: string;
@@ -64,14 +65,21 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
   const [uploadError, setUploadError] = useState("");
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const maxProgressByDocIdRef = useRef<Map<string, number>>(new Map());
+
+  const applyDisplayProgress = useCallback((docs: Document[]) => {
+    return keepDocumentProgressMonotonic(docs, maxProgressByDocIdRef.current);
+  }, []);
 
   const fetchDocuments = useCallback(async () => {
     try {
       const docs = await listDocuments(workspaceId);
-      setDocuments((prev) => [
-        ...prev.filter((doc) => doc.progress?.stage === UPLOADING_STAGE),
-        ...docs,
-      ]);
+      setDocuments((prev) =>
+        applyDisplayProgress([
+          ...prev.filter((doc) => doc.progress?.stage === UPLOADING_STAGE),
+          ...docs,
+        ]),
+      );
     } catch {
       console.error("Failed to load documents");
     }
@@ -104,21 +112,23 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
           workspaceId,
           filename: file.name,
         });
-        setDocuments((prev) => [uploadingDoc, ...prev]);
+        setDocuments((prev) => applyDisplayProgress([uploadingDoc, ...prev]));
         try {
           const result = await uploadDocument(workspaceId, file);
           console.log(`[DocPanel] uploaded: id=${result.id} status=${result.status}`);
           setDocuments((prev) =>
-            replaceUploadingDocument(
-              prev.filter((doc) => doc.id !== result.id),
-              uploadingId,
-              result,
+            applyDisplayProgress(
+              replaceUploadingDocument(
+                prev.filter((doc) => doc.id !== result.id),
+                uploadingId,
+                result,
+              ),
             ),
           );
         } catch (err) {
           const msg = err instanceof Error ? err.message : `上传 ${file.name} 失败`;
           errors.push(msg);
-          setDocuments((prev) => markUploadFailed(prev, uploadingId, msg));
+          setDocuments((prev) => applyDisplayProgress(markUploadFailed(prev, uploadingId, msg)));
         }
       }
       if (errors.length > 0) {
@@ -132,7 +142,7 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
         fileInputRef.current.value = "";
       }
     }
-  }, [workspaceId, fetchDocuments]);
+  }, [workspaceId, fetchDocuments, applyDisplayProgress]);
 
   const handleUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
     const files = event.target.files;

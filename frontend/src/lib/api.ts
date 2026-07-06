@@ -1,5 +1,10 @@
 const API_BASE = process.env.NEXT_PUBLIC_API_BASE || "http://localhost:8000";
 
+const GENERIC_API_ERROR = "服务暂时不可用，请稍后重试。";
+const FILE_LOAD_ERROR = "文件加载失败，请稍后重试。";
+const FILE_DOWNLOAD_ERROR = "文件下载失败，请稍后重试。";
+const UPLOAD_ERROR = "上传失败，请稍后重试。";
+
 /**
  * Unified API response envelope.
  * All business endpoints return HTTP 200 with this structure.
@@ -26,11 +31,27 @@ async function request<T>(
 ): Promise<T> {
   const method = options?.method || "GET";
   console.log(`[API] ${method} ${path}`);
-  const response = await fetch(`${API_BASE}${path}`, {
-    headers: { "Content-Type": "application/json", ...options?.headers },
-    ...options,
-  });
-  const body: ApiResponse<T> = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      headers: { "Content-Type": "application/json", ...options?.headers },
+      ...options,
+    });
+  } catch (error) {
+    console.error(`[API] ${method} ${path} network error:`, error);
+    throw new Error(GENERIC_API_ERROR);
+  }
+  if (!response.ok) {
+    console.error(`[API] ${method} ${path} http error: status=${response.status}`);
+    throw new Error(GENERIC_API_ERROR);
+  }
+  let body: ApiResponse<T>;
+  try {
+    body = await response.json();
+  } catch (error) {
+    console.error(`[API] ${method} ${path} invalid json:`, error);
+    throw new Error(GENERIC_API_ERROR);
+  }
   if (body.code !== 0) {
     console.error(`[API] ${method} ${path} biz error: code=${body.code} message=${body.message}`);
     throw new ApiError(body.code, body.message);
@@ -251,11 +272,27 @@ export async function uploadDocument(
   console.log(`[API] POST /api/workspaces/${workspaceId}/documents file=${file.name} size=${file.size}`);
   const formData = new FormData();
   formData.append("file", file);
-  const response = await fetch(
-    `${API_BASE}/api/workspaces/${workspaceId}/documents`,
-    { method: "POST", body: formData }
-  );
-  const body: ApiResponse<Document> = await response.json();
+  let response: Response;
+  try {
+    response = await fetch(
+      `${API_BASE}/api/workspaces/${workspaceId}/documents`,
+      { method: "POST", body: formData }
+    );
+  } catch (error) {
+    console.error("[API] document upload network error:", error);
+    throw new Error(UPLOAD_ERROR);
+  }
+  if (!response.ok) {
+    console.error(`[API] document upload http error: status=${response.status}`);
+    throw new Error(UPLOAD_ERROR);
+  }
+  let body: ApiResponse<Document>;
+  try {
+    body = await response.json();
+  } catch (error) {
+    console.error("[API] document upload invalid json:", error);
+    throw new Error(UPLOAD_ERROR);
+  }
   if (body.code !== 0) {
     throw new ApiError(body.code, body.message);
   }
@@ -390,11 +427,26 @@ export function submitStyleExtraction(
     `${API_BASE}/api/workspaces/${workspaceId}/style-extraction`,
     { method: "POST", body: formData }
   ).then(async (res) => {
-    const body: ApiResponse<Task> = await res.json();
+    if (!res.ok) {
+      console.error(`[API] style extraction upload http error: status=${res.status}`);
+      throw new Error(UPLOAD_ERROR);
+    }
+    let body: ApiResponse<Task>;
+    try {
+      body = await res.json();
+    } catch (error) {
+      console.error("[API] style extraction upload invalid json:", error);
+      throw new Error(UPLOAD_ERROR);
+    }
     if (body.code !== 0) {
       throw new ApiError(body.code, body.message);
     }
     return body.data;
+  }).catch((error) => {
+    if (error instanceof ApiError) throw error;
+    if (error instanceof Error && error.message === UPLOAD_ERROR) throw error;
+    console.error("[API] style extraction upload network error:", error);
+    throw new Error(UPLOAD_ERROR);
   });
 }
 
@@ -501,8 +553,17 @@ export async function getShareDetail(token: string): Promise<ShareDetail> {
  */
 export async function downloadTaskFile(taskId: string, filename = "download"): Promise<void> {
   const url = `${API_BASE}/api/tasks/${taskId}/download?t=${Date.now()}`;
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Download failed: ${res.status}`);
+  let res: Response;
+  try {
+    res = await fetch(url);
+  } catch (error) {
+    console.error("[API] download network error:", error);
+    throw new Error(FILE_DOWNLOAD_ERROR);
+  }
+  if (!res.ok) {
+    console.error(`[API] download http error: status=${res.status}`);
+    throw new Error(FILE_DOWNLOAD_ERROR);
+  }
   const blob = await res.blob();
   const blobUrl = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -515,7 +576,16 @@ export async function downloadTaskFile(taskId: string, filename = "download"): P
 }
 
 export async function fetchFileContent(fileUrl: string): Promise<string> {
-  const response = await fetch(fileUrl);
-  if (!response.ok) throw new Error(`Failed to fetch file: ${response.status}`);
+  let response: Response;
+  try {
+    response = await fetch(fileUrl);
+  } catch (error) {
+    console.error("[API] file fetch network error:", error);
+    throw new Error(FILE_LOAD_ERROR);
+  }
+  if (!response.ok) {
+    console.error(`[API] file fetch http error: status=${response.status}`);
+    throw new Error(FILE_LOAD_ERROR);
+  }
   return response.text();
 }

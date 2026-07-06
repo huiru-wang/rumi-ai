@@ -4,6 +4,7 @@ import { type RefObject, useCallback, useEffect, useRef, useState } from "react"
 import { useParams } from "next/navigation";
 import { AlertCircle, ChevronLeft, ChevronRight, Loader2, Maximize, Minimize, Pause, Play, Volume2, VolumeX } from "lucide-react";
 import { fetchFileContent, getShareDetail, type ShareDetail, type ShareSlide } from "@/lib/api";
+import { toUserFacingErrorMessage } from "@/lib/user-facing-error";
 
 const NAV_SCRIPT = `
 document.documentElement.style.overflow = 'hidden';
@@ -195,8 +196,8 @@ function SharedNarrationPlayer({ detail }: { detail: ShareDetail }) {
         setIsFrameReady(false);
         setPptHtml(html.replace("</body>", `<script>${NAV_SCRIPT}</script></body>`));
         setDurations(new Array(slides.length).fill(0));
-      } catch {
-        if (!cancelled) setError("加载播放内容失败");
+      } catch (err) {
+        if (!cancelled) setError(toUserFacingErrorMessage(err, "播放内容加载失败，请稍后重试。"));
       } finally {
         if (!cancelled) setIsLoading(false);
       }

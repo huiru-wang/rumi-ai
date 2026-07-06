@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Play, Pause, ChevronLeft, ChevronRight, Loader2, AlertCircle, Volume2, VolumeX, Maximize, Minimize } from "lucide-react";
 import { fetchFileContent, getTaskAudioUrl, getTaskPreviewUrl, type Task } from "@/lib/api";
+import { toUserFacingErrorMessage } from "@/lib/user-facing-error";
 
 const NAV_SCRIPT = `
 /* Lock down: disable all manual interaction */
@@ -106,7 +107,7 @@ export function PPTPlayerDialog({ narrationTask, pptTask, onClose }: PPTPlayerDi
         setIsLoading(false);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载失败");
+          setError(toUserFacingErrorMessage(err, "播放内容加载失败，请稍后重试。"));
           setIsLoading(false);
         }
       }

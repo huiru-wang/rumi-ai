@@ -1,6 +1,7 @@
 "use client";
 
-import { groupMessagesIntoTurns } from "./helpers";
+import { useMemo } from "react";
+import { buildToolResultMap, groupMessagesIntoTurns } from "./helpers";
 import { HumanBubble } from "./human-bubble";
 import { AITurnBubble } from "./ai-turn-bubble";
 import type { DisplayRun } from "./types";
@@ -13,6 +14,10 @@ export function MessageList({ messages, runs }: { messages: any[]; runs?: Displa
   const displayRuns = runs?.length
     ? runs
     : [{ key: "legacy-flat-messages", run_id: null, status: "history" as const, messages }];
+  const toolResults = useMemo(
+    () => buildToolResultMap(displayRuns.flatMap((run) => run.messages)),
+    [displayRuns],
+  );
 
   return (
     <>
@@ -33,6 +38,7 @@ export function MessageList({ messages, runs }: { messages: any[]; runs?: Displa
             <AITurnBubble
               key={`${keyPrefix}:ai:${entry.turn.id}`}
               turn={entry.turn}
+              toolResults={toolResults}
             />
           );
         });

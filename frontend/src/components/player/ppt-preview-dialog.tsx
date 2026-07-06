@@ -3,6 +3,7 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, Save, Check, Loader2, AlertCircle, Maximize } from "lucide-react";
 import { fetchFileContent, getTaskPreviewUrl, saveTaskFile, type Task, type PptStyleInfo } from "@/lib/api";
+import { toUserFacingErrorMessage } from "@/lib/user-facing-error";
 
 // Minimal script injected into iframe:
 // 1. Reports edit mode changes (E key) to parent
@@ -117,7 +118,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
         setIsLoading(false);
       } catch (err) {
         if (!cancelled) {
-          setError(err instanceof Error ? err.message : "加载失败");
+          setError(toUserFacingErrorMessage(err, "PPT 加载失败，请稍后重试。"));
           setIsLoading(false);
         }
       }
@@ -200,7 +201,7 @@ export function PPTPreviewDialog({ workspaceId, pptTask, styles, onClose }: PPTP
       saveTimeoutRef.current = setTimeout(() => setSaveState("idle"), 2000);
     } catch (err) {
       setSaveState("error");
-      setSaveError(err instanceof Error ? err.message : "保存失败");
+      setSaveError(toUserFacingErrorMessage(err, "保存失败，请稍后重试。"));
     }
   }, [workspaceId, pptTask.id]);
 

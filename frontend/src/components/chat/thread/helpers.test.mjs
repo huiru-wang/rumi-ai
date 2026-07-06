@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import test from "node:test";
 
 import {
+  buildToolResultMap,
   getMessageScrollSignature,
   shouldDisableAutoScrollOnWheel,
   shouldRestoreAutoScrollFromPosition,
@@ -35,4 +36,26 @@ test("auto scroll restores only when the user reaches the bottom", () => {
   assert.equal(shouldRestoreAutoScrollFromPosition({ userOverride: true, isNearBottom: false }), false);
   assert.equal(shouldRestoreAutoScrollFromPosition({ userOverride: true, isNearBottom: true }), true);
   assert.equal(shouldRestoreAutoScrollFromPosition({ userOverride: false, isNearBottom: true }), false);
+});
+
+test("tool result map indexes tool messages across runs by tool_call_id", () => {
+  const toolResult = {
+    type: "tool",
+    name: "clarify_form",
+    tool_call_id: "call_123",
+    content: '{"topic":"Go Slice"}',
+    run_id: "resume-run",
+  };
+  const messages = [
+    {
+      type: "ai",
+      run_id: "original-run",
+      tool_calls: [{ id: "call_123", name: "clarify_form", args: {} }],
+    },
+    toolResult,
+  ];
+
+  const resultMap = buildToolResultMap(messages);
+
+  assert.equal(resultMap.get("call_123"), toolResult);
 });

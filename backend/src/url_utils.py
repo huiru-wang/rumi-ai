@@ -36,8 +36,8 @@ def build_style_extraction_resource_url(task_id: str, filename: str) -> str:
 
 
 def build_document_asset_url(doc_id: str, filename: str) -> str:
-    """Build a public preview URL for a document-derived asset."""
+    """Build a frontend-safe proxy path for a document-derived asset."""
     return (
-        f"{get_public_api_base()}/api/documents/"
+        f"/api/documents/"
         f"{quote(doc_id, safe='')}/asset/{quote(filename, safe='')}"
     )

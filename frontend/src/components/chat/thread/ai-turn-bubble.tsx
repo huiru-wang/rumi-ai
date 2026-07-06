@@ -16,7 +16,13 @@ import { ToolCallCard } from "./tool-call-card";
 // AITurnBubble
 // ============================================================
 
-export const AITurnBubble = memo(function AITurnBubble({ turn }: { turn: AITurn }) {
+export const AITurnBubble = memo(function AITurnBubble({
+  turn,
+  toolResults,
+}: {
+  turn: AITurn;
+  toolResults?: Map<string, any>;
+}) {
   const effectiveToolMessages = turn.toolMessages;
 
   // --- Step 1: Collect all tool calls to build the result map ---
@@ -109,7 +115,7 @@ export const AITurnBubble = memo(function AITurnBubble({ turn }: { turn: AITurn 
             kind: "toolcall",
             key: `tc-${renderId}`,
             tc: canonicalTc,
-            result: toolResultMap.get(canonicalTc.id || ""),
+            result: toolResultMap.get(canonicalTc.id || "") ?? toolResults?.get(canonicalTc.id || ""),
           });
         }
       }
@@ -131,7 +137,7 @@ export const AITurnBubble = memo(function AITurnBubble({ turn }: { turn: AITurn 
           kind: "toolcall",
           key: `tc-${renderId}`,
           tc: canonical,
-          result: toolResultMap.get(canonical.id || ""),
+          result: toolResultMap.get(canonical.id || "") ?? toolResults?.get(canonical.id || ""),
         });
       }
     }
@@ -147,7 +153,7 @@ export const AITurnBubble = memo(function AITurnBubble({ turn }: { turn: AITurn 
       kind: "toolcall",
       key: `tc-${renderId}`,
       tc,
-      result: toolResultMap.get(tc.id || ""),
+      result: toolResultMap.get(tc.id || "") ?? toolResults?.get(tc.id || ""),
     });
   }
 
@@ -188,6 +194,7 @@ export const AITurnBubble = memo(function AITurnBubble({ turn }: { turn: AITurn 
   if (prev.turn.id !== next.turn.id) return false;
   if (prev.turn.aiMessages.length !== next.turn.aiMessages.length) return false;
   if (prev.turn.toolMessages.length !== next.turn.toolMessages.length) return false;
+  if (prev.toolResults !== next.toolResults) return false;
   return prev.turn.aiMessages.every((m, i) => m === next.turn.aiMessages[i]) &&
     prev.turn.toolMessages.every((m, i) => m === next.turn.toolMessages[i]);
 });

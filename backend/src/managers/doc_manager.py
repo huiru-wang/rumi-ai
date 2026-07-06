@@ -24,18 +24,62 @@ from src.storage.vector_store import VectorStore
 logger = logging.getLogger(__name__)
 
 PROGRESS_STAGES = {
-    "uploaded": ("等待解析", 0),
-    "parsing": ("正在解析文档结构", 5),
-    "parsed": ("文档结构解析完成", 60),
-    "chunking": ("正在切分文档片段", 70),
-    "indexing": ("正在写入知识库索引", 82),
-    "summarizing": ("正在生成文档摘要", 92),
-    "ready": ("解析完成", 100),
-    "error": ("解析失败", 100),
+    "uploaded": ("等待解析", 5, 5),
+    "parsing": ("正在解析文档结构", 5, 45),
+    "parsed": ("文档结构解析完成", 60, 60),
+    "chunking": ("正在切分文档片段", 60, 70),
+    "indexing": ("正在写入知识库索引", 70, 88),
+    "summarizing": ("正在生成文档摘要", 88, 98),
+    "ready": ("解析完成", 100, 100),
+    "error": ("解析失败", 0, 0),
 }
 PDF_ESTIMATE_SECONDS_PER_PAGE = 2.5
 PDF_ESTIMATE_FIXED_SECONDS = 10
 PDF_ESTIMATE_NOTE = "若文档包含较多图片或图表，解析时间可能增加"
+
+
+def build_document_progress(
+    stage: str,
+    *,
+    message: str = "",
+    percent: int | None = None,
+    current: int = 0,
+    total: int = 0,
+    estimated_minutes: int | None = None,
+    estimate_note: str = "",
+) -> dict:
+    stage_label, start_percent, end_percent = PROGRESS_STAGES.get(stage, (stage, 0, 0))
+    if percent is None:
+        if total > 0 and end_percent > start_percent:
+            ratio = max(0, min(1, current / total))
+            percent = round(start_percent + ratio * (end_percent - start_percent))
+        else:
+            percent = start_percent
+    progress = {
+        "stage": stage,
+        "stage_label": stage_label,
+        "percent": max(0, min(100, percent)),
+        "message": message or stage_label,
+        "current": max(0, current),
+        "total": max(0, total),
+        "updated_at": datetime.now().isoformat(),
+    }
+    if estimated_minutes is not None:
+        progress["estimated_minutes"] = max(1, estimated_minutes)
+    if estimate_note:
+        progress["estimate_note"] = estimate_note
+    return progress
+
+
+def merge_progress_percent(progress: dict, previous_progress: dict | None) -> dict:
+    if not previous_progress:
+        return progress
+    try:
+        previous_percent = int(previous_progress.get("percent", 0))
+    except (TypeError, ValueError):
+        previous_percent = 0
+    progress["percent"] = max(previous_percent, int(progress.get("percent", 0)))
+    return progress
 
 
 class DuplicateDocumentError(ValueError):
@@ -159,7 +203,7 @@ class DocManager:
                 doc_id,
                 "parsing",
                 message="正在理解图片和图表内容",
-                percent=56,
+                percent=45,
                 estimated_minutes=estimated_minutes,
                 estimate_note=estimate_note,
             )
@@ -320,21 +364,15 @@ class DocManager:
         estimated_minutes: int | None = None,
         estimate_note: str = "",
     ) -> dict:
-        stage_label, default_percent = PROGRESS_STAGES.get(stage, (stage, 0))
-        progress = {
-            "stage": stage,
-            "stage_label": stage_label,
-            "percent": max(0, min(100, percent if percent is not None else default_percent)),
-            "message": message or stage_label,
-            "current": max(0, current),
-            "total": max(0, total),
-            "updated_at": datetime.now().isoformat(),
-        }
-        if estimated_minutes is not None:
-            progress["estimated_minutes"] = max(1, estimated_minutes)
-        if estimate_note:
-            progress["estimate_note"] = estimate_note
-        return progress
+        return build_document_progress(
+            stage,
+            message=message,
+            percent=percent,
+            current=current,
+            total=total,
+            estimated_minutes=estimated_minutes,
+            estimate_note=estimate_note,
+        )
 
     def _estimate_pdf_minutes(self, page_count: int) -> int:
         seconds = page_count * PDF_ESTIMATE_SECONDS_PER_PAGE + PDF_ESTIMATE_FIXED_SECONDS
@@ -397,6 +435,9 @@ class DocManager:
             estimated_minutes=estimated_minutes,
             estimate_note=estimate_note,
         )
+        doc = await self._get_document_by_id(doc_id)
+        previous_progress = self._parse_progress_data(doc.get("progress_data")) if doc else {}
+        progress = merge_progress_percent(progress, previous_progress)
         updates = {"status": stage, "progress_data": json.dumps(progress, ensure_ascii=False)}
         if extra_updates:
             updates.update(extra_updates)
@@ -459,14 +500,10 @@ class DocManager:
             return await self.file_store.save_doc(workspace_id, asset_path, asset_content)
 
         async def report_pdf_page(current: int, total: int) -> None:
-            percent = 5
-            if total > 0:
-                percent = 5 + int((current / total) * 50)
             await self._update_progress(
                 progress_doc_id or doc_id,
                 "parsing",
                 message="正在解析 PDF 页面",
-                percent=percent,
                 current=current,
                 total=total,
             )
