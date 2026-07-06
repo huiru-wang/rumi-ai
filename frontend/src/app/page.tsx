@@ -197,7 +197,7 @@ export default function Home() {
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
               >
                 <Plus size={15} />
-              新建工作区
+                新建工作区
               </button>
             </div>
 
