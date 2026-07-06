@@ -37,10 +37,14 @@ export default function Home() {
       setLoading(false);
       return;
     }
-    setUserId(currentUserId);
-    setNickname(getUserNickname());
+    setUserId(null);
+    setNickname(null);
+    setWorkspaces([]);
+    setLoading(true);
     try {
       const data = await listWorkspaces(currentUserId);
+      setUserId(currentUserId);
+      setNickname(getUserNickname());
       setWorkspaces(data);
     } catch (err) {
       if (err instanceof ApiError && err.code === 70001) {
@@ -95,8 +99,6 @@ export default function Home() {
       const data = await claimInvite(code);
       setInviteUser(data.user_id, data.nickname);
       setInviteCode("");
-      setUserId(data.user_id);
-      setNickname(data.nickname);
       setLoading(true);
       await fetchWorkspaces();
     } catch (err) {
@@ -150,7 +152,11 @@ export default function Home() {
 
       {/* Content */}
       <main className="flex-1 px-8 py-8">
-        {!userId ? (
+        {loading ? (
+          <div className="py-20 text-center text-muted-foreground">
+            加载中...
+          </div>
+        ) : !userId ? (
           <div className="mx-auto flex min-h-[60vh] max-w-sm items-center">
             <form
               onSubmit={handleClaimInvite}
@@ -191,15 +197,11 @@ export default function Home() {
                 className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
               >
                 <Plus size={15} />
-                新建工作区
+              新建工作区
               </button>
             </div>
 
-            {loading ? (
-              <div className="py-20 text-center text-muted-foreground">
-                加载中...
-              </div>
-            ) : workspaces.length === 0 ? (
+            {workspaces.length === 0 ? (
               <div className="flex flex-col items-center gap-4 py-20 text-muted-foreground">
                 <svg viewBox="0 0 120 120" className="h-12 w-12 text-logo-primary" aria-hidden="true">
                   <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round"/>
