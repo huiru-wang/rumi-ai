@@ -17,6 +17,11 @@ import {
   type Document,
   type DocumentStatus,
 } from "@/lib/api";
+import {
+  createUploadingDocument,
+  markUploadFailed,
+  replaceUploadingDocument,
+} from "./document-upload-state";
 
 interface DocumentPanelProps {
   workspaceId: string;
@@ -44,6 +49,8 @@ const ACTIVE_STATUSES = new Set<DocumentStatus>([
   "summarizing",
 ]);
 
+const UPLOADING_STAGE = "uploading";
+
 const FILE_TYPE_LABELS: Record<string, string> = {
   pdf: "PDF",
   docx: "Docx",
@@ -61,7 +68,10 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
   const fetchDocuments = useCallback(async () => {
     try {
       const docs = await listDocuments(workspaceId);
-      setDocuments(docs);
+      setDocuments((prev) => [
+        ...prev.filter((doc) => doc.progress?.stage === UPLOADING_STAGE),
+        ...docs,
+      ]);
     } catch {
       console.error("Failed to load documents");
     }
@@ -88,16 +98,27 @@ export function DocumentPanel({ workspaceId }: DocumentPanelProps) {
     try {
       for (const file of fileArray) {
         console.log(`[DocPanel] uploading: ${file.name} (${file.size} bytes)`);
+        const uploadingId = `uploading-${crypto.randomUUID()}`;
+        const uploadingDoc = createUploadingDocument({
+          id: uploadingId,
+          workspaceId,
+          filename: file.name,
+        });
+        setDocuments((prev) => [uploadingDoc, ...prev]);
         try {
           const result = await uploadDocument(workspaceId, file);
           console.log(`[DocPanel] uploaded: id=${result.id} status=${result.status}`);
-          setDocuments((prev) => [
-            result,
-            ...prev.filter((doc) => doc.id !== result.id),
-          ]);
+          setDocuments((prev) =>
+            replaceUploadingDocument(
+              prev.filter((doc) => doc.id !== result.id),
+              uploadingId,
+              result,
+            ),
+          );
         } catch (err) {
           const msg = err instanceof Error ? err.message : `上传 ${file.name} 失败`;
           errors.push(msg);
+          setDocuments((prev) => markUploadFailed(prev, uploadingId, msg));
         }
       }
       if (errors.length > 0) {

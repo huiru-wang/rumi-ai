@@ -5,6 +5,7 @@ import { SendHorizontal, Square, Zap } from "lucide-react";
 import { useStreamContext } from "../assistant";
 import type { SlashCommand } from "./types";
 import { SLASH_COMMANDS } from "./human-bubble";
+import { shouldFocusAfterLoadingChange } from "./chat-input-focus";
 
 // ============================================================
 // SlashCommandMenu
@@ -75,6 +76,7 @@ export function ChatInput() {
   const { submit, stop, isLoading, externalCommand, onExternalCommandConsumed } = useStreamContext();
   const inputRef = useRef<HTMLInputElement>(null);
   const pptRefTagRef = useRef<string | null>(null);
+  const wasLoadingRef = useRef(isLoading);
 
   // Listen for external command injection (e.g. from Mic button on PPT card)
   useEffect(() => {
@@ -97,6 +99,17 @@ export function ChatInput() {
       onExternalCommandConsumed?.();
     }
   }, [externalCommand, onExternalCommandConsumed]);
+
+  useEffect(() => {
+    const wasLoading = wasLoadingRef.current;
+    wasLoadingRef.current = isLoading;
+    if (!shouldFocusAfterLoadingChange({ wasLoading, isLoading })) return;
+
+    const focusId = window.requestAnimationFrame(() => {
+      inputRef.current?.focus();
+    });
+    return () => window.cancelAnimationFrame(focusId);
+  }, [isLoading]);
 
   const slashFilter = text.startsWith("/") ? text : "";
   const filteredCommands = SLASH_COMMANDS.filter(
