@@ -71,6 +71,16 @@ _BUILTIN_PPT_STYLES = [
         "preview_path": "peach-lavender-split.html",
         "style_description": _load_style_description("peach-lavender-split"),
     },
+    {
+        "id": "sys-work-summary",
+        "user_id": "system",
+        "category": "report",
+        "name": "工作总结",
+        "name_en": "work-summary",
+        "description": "橙红渐变商务工作总结风格，适合日报周报、阶段复盘、团队同步和工作汇报。",
+        "preview_path": "work-summary.html",
+        "style_description": _load_style_description("work-summary"),
+    },
 ]
 
 

@@ -6,8 +6,8 @@ import {
   ChevronDown,
   Copy,
   Check,
-  ListChecks,
   Mic,
+  Palette,
   Presentation,
   Search,
   ThumbsUp,
@@ -134,13 +134,8 @@ export function TypingIndicator() {
 const EMPTY_STATE_ACTIONS = [
   {
     icon: Search,
-    title: "问文档内容",
-    examples: ["总结这份报告的核心结论", "找出关于市场规模的依据"],
-  },
-  {
-    icon: ListChecks,
-    title: "整理知识结构",
-    examples: ["整理成一页决策摘要", "提炼观点、风险和行动项"],
+    title: "问文档和整理知识",
+    examples: ["总结这份报告的核心结论", "提炼观点、风险和行动项"],
   },
   {
     icon: Presentation,
@@ -151,6 +146,11 @@ const EMPTY_STATE_ACTIONS = [
     icon: Mic,
     title: "生成口播和音频",
     examples: ["给 PPT 生成 5 分钟口播稿", "合成自然语气的讲解音频"],
+  },
+  {
+    icon: Palette,
+    title: "提取视觉风格",
+    examples: ["上传 PPTX 提取视觉风格", "保存成可复用的 PPT 风格"],
   },
 ];
 

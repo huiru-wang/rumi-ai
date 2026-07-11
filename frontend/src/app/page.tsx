@@ -27,6 +27,8 @@ export default function Home() {
   const [dialogOpen, setDialogOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
+  const [deletingWorkspaceId, setDeletingWorkspaceId] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState("");
 
   const fetchWorkspaces = useCallback(async () => {
     const currentUserId = getUserId();
@@ -114,7 +116,9 @@ export default function Home() {
   };
 
   const handleDelete = (id: string) => {
+    if (deletingWorkspaceId) return;
     const ws = workspaces.find((w) => w.id === id) ?? null;
+    setDeleteError("");
     setDeleteTarget(ws);
   };
 
@@ -122,11 +126,20 @@ export default function Home() {
     if (!deleteTarget) return;
     const id = deleteTarget.id;
     setDeleteTarget(null);
-    await deleteWorkspace(id);
-    fetchWorkspaces();
+    setDeletingWorkspaceId(id);
+    setDeleteError("");
+    try {
+      await deleteWorkspace(id);
+      await fetchWorkspaces();
+    } catch (err) {
+      setDeleteError(err instanceof Error ? err.message : "删除工作区失败，请稍后重试。");
+    } finally {
+      setDeletingWorkspaceId(null);
+    }
   };
 
   const handleOpen = (id: string) => {
+    if (deletingWorkspaceId === id) return;
     router.push(`/workspace/${id}`);
   };
 
@@ -194,12 +207,18 @@ export default function Home() {
               <h2 className="text-xl font-semibold text-foreground">工作区</h2>
               <button
                 onClick={() => setDialogOpen(true)}
-                className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90"
+                disabled={Boolean(deletingWorkspaceId)}
+                className="flex items-center gap-1.5 rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-foreground transition-colors hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
               >
                 <Plus size={15} />
                 新建工作区
               </button>
             </div>
+            {deleteError && (
+              <div className="mb-4 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+                {deleteError}
+              </div>
+            )}
 
             {workspaces.length === 0 ? (
               <div className="flex flex-col items-center gap-4 py-20 text-muted-foreground">
@@ -218,6 +237,7 @@ export default function Home() {
                     workspace={workspace}
                     onOpen={handleOpen}
                     onDelete={handleDelete}
+                    deleting={deletingWorkspaceId === workspace.id}
                   />
                 ))}
               </div>
