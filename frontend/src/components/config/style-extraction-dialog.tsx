@@ -239,7 +239,7 @@ export function StyleExtractionDialog({
                   <Info size={14} className="text-muted-foreground" />
                   <div
                     role="tooltip"
-                    className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-[11px] font-normal leading-relaxed text-popover-foreground shadow-lg group-hover:block group-focus:block"
+                    className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-background px-3 py-2 text-[11px] font-normal leading-relaxed text-foreground shadow-xl group-hover:block group-focus:block"
                   >
                     视觉风格提取不会完整复刻原PPT文件，而是提取关键元素、样式、布局、配色方案等关键信息。
                   </div>

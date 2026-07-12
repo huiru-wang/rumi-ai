@@ -15,6 +15,7 @@ import {
 import { WorkspaceCard } from "@/components/workspace/workspace-card";
 import { CreateDialog } from "@/components/workspace/create-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BetaInfo } from "@/components/beta-info";
 
 export default function Home() {
   const router = useRouter();
@@ -149,11 +150,12 @@ export default function Home() {
       <header className="flex items-center justify-between border-b border-border px-8 py-4">
         <div className="flex items-center gap-2.5">
           <svg viewBox="0 0 120 120" className="h-7 w-7 text-logo-primary" aria-hidden="true">
-            <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round"/>
-            <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round"/>
-            <circle cx="60" cy="62" r="4" fill="currentColor"/>
+            <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round" />
+            <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round" />
+            <circle cx="60" cy="62" r="4" fill="currentColor" />
           </svg>
           <h1 className="text-lg font-semibold text-foreground">RumiAI</h1>
+          <BetaInfo />
           {nickname && (
             <span className="rounded-md border border-border px-2 py-1 text-xs text-muted-foreground">
               {nickname}
@@ -179,7 +181,7 @@ export default function Home() {
                 <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-accent text-accent-foreground">
                   <KeyRound size={18} />
                 </div>
-                <h2 className="text-base font-semibold text-foreground">输入邀请码</h2>
+                <h2 className="text-base font-semibold text-foreground">邀请码</h2>
               </div>
               <input
                 value={inviteCode}
@@ -223,9 +225,9 @@ export default function Home() {
             {workspaces.length === 0 ? (
               <div className="flex flex-col items-center gap-4 py-20 text-muted-foreground">
                 <svg viewBox="0 0 120 120" className="h-12 w-12 text-logo-primary" aria-hidden="true">
-                  <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round"/>
-                  <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="3" fill="none" strokeLinecap="round"/>
-                  <circle cx="60" cy="62" r="4" fill="currentColor"/>
+                  <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="4" fill="none" strokeLinecap="round" />
+                  <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="3" fill="none" strokeLinecap="round" />
+                  <circle cx="60" cy="62" r="4" fill="currentColor" />
                 </svg>
                 <p>还没有工作区，创建一个开始吧</p>
               </div>

@@ -13,6 +13,7 @@ import { PPTPlayerDialog } from "@/components/player/ppt-player-dialog";
 import { PPTPreviewDialog } from "@/components/player/ppt-preview-dialog";
 import { StyleExtractionDialog } from "@/components/config/style-extraction-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { BetaInfo } from "@/components/beta-info";
 import type { ExternalCommand } from "@/components/chat/assistant";
 
 export default function WorkspacePage() {
@@ -134,7 +135,7 @@ export default function WorkspacePage() {
   return (
     <div className="flex h-screen flex-col">
       {/* Workspace Header */}
-      <header className="flex items-center gap-3 border-b border-border px-4 py-2.5">
+      <header className="flex h-[61px] shrink-0 items-center gap-3 border-b border-border px-8">
         <button
           onClick={() => router.push("/")}
           className="rounded-md p-1.5 text-muted-foreground transition-colors hover:text-foreground"
@@ -150,14 +151,15 @@ export default function WorkspacePage() {
           <FileText size={16} />
         </button>
         <div className="flex min-w-0 items-center gap-2">
-          <svg viewBox="0 0 120 120" className="h-4.5 w-4.5 shrink-0 text-logo-primary" aria-hidden="true">
+          <svg viewBox="0 0 120 120" className="h-7 w-7 shrink-0 text-logo-primary" aria-hidden="true">
             <path d="M60,22 C82,22 100,40 100,62 C100,84 82,102 60,102 C45,102 32,94 25,82" stroke="currentColor" strokeWidth="5" fill="none" strokeLinecap="round"/>
             <path d="M60,42 C71,42 80,51 80,62 C80,73 71,82 60,82 C52,82 46,78 43,72" stroke="#C75B3A" strokeWidth="4" fill="none" strokeLinecap="round"/>
             <circle cx="60" cy="62" r="4" fill="currentColor"/>
           </svg>
-          <span className="truncate text-sm font-medium text-foreground">
+          <span className="truncate text-lg font-semibold text-foreground">
             {workspace.name}
           </span>
+          <BetaInfo />
         </div>
         <div className="ml-auto flex items-center gap-1">
           {/* Mobile: right drawer button */}
@@ -241,4 +243,3 @@ export default function WorkspacePage() {
     </div>
   );
 }
-
