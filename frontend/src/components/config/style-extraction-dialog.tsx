@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useRef, useState } from "react";
-import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle, ArrowLeft } from "lucide-react";
+import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle, ArrowLeft, Info } from "lucide-react";
 import { getBusinessErrorMessage, getStyleExtractionPreviewUrl, getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
 
 interface StyleExtractionDialogProps {
@@ -179,6 +179,13 @@ export function StyleExtractionDialog({
 
   const styleName = rd?.style_name as string | undefined;
   const shortDescription = rd?.description as string | undefined;
+  const parseSummary = rd?.parse_summary as
+    | { slide_count?: number; background_image_count?: number }
+    | undefined;
+  const slideCount = parseSummary?.slide_count;
+  const estimatedMinutes = slideCount
+    ? Math.ceil((120 + slideCount * 20) / 60)
+    : null;
   const alreadySaved = !!rd?.saved_style_id;
   const isCompleted = task?.status === "completed";
   const isFailed = task?.status === "failed" || task?.status === "cancelled";
@@ -224,9 +231,20 @@ export function StyleExtractionDialog({
                 </div>
               </div>
             ) : (
-              <h3 className="text-sm font-semibold text-foreground">
-                视觉风格提取
-              </h3>
+              <div className="flex items-center gap-1.5">
+                <h3 className="text-sm font-semibold text-foreground">
+                  视觉风格提取
+                </h3>
+                <div className="group relative flex" tabIndex={0}>
+                  <Info size={14} className="text-muted-foreground" />
+                  <div
+                    role="tooltip"
+                    className="pointer-events-none absolute bottom-full left-1/2 z-20 mb-2 hidden w-72 -translate-x-1/2 rounded-md border border-border bg-popover px-3 py-2 text-[11px] font-normal leading-relaxed text-popover-foreground shadow-lg group-hover:block group-focus:block"
+                  >
+                    视觉风格提取不会完整复刻原PPT文件，而是提取关键元素、样式、布局、配色方案等关键信息。
+                  </div>
+                </div>
+              </div>
             )}
             <button
               onClick={previewOpen ? () => setPreviewOpen(false) : onClose}
@@ -237,7 +255,10 @@ export function StyleExtractionDialog({
           </div>
           {!previewOpen && !isCompleted && !isFailed && (
             <p className="mt-1.5 text-[11px] text-muted-foreground">
-              预计需要 5 分钟完成，可关闭窗口。任务已在「产出」中，随时可查看进度。
+              {estimatedMinutes
+                ? `共 ${slideCount} 页，预计需要 ${estimatedMinutes} 分钟完成。`
+                : "正在解析文件并估算完成时间。"}
+              可关闭窗口，任务已在「产出」中，随时可查看进度。
             </p>
           )}
         </div>
@@ -287,6 +308,12 @@ export function StyleExtractionDialog({
                   <div className="ml-6 mt-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
                     <p className="text-[11px] text-red-400">{errorMessage}</p>
                   </div>
+                )}
+
+                {step.key === "parsing" && parseSummary && (
+                  <p className="ml-6 mt-1 text-[11px] text-muted-foreground">
+                    {parseSummary.slide_count ?? 0} 页 · {parseSummary.background_image_count ?? 0} 张背景图片
+                  </p>
                 )}
 
                 {/* 分析风格特征完成后，内联显示风格名称+描述 */}

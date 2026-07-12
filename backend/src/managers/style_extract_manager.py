@@ -159,8 +159,20 @@ class StyleExtractManager:
                     (resource_dir / filename).read_bytes(),
                 )
 
+            background_resources = build_background_manifest(parsed, available_files)
+            parse_summary = {
+                "slide_count": len(parsed.get("slides", [])),
+                "background_image_count": len(background_resources),
+            }
+            await self._update_progress(
+                task_id,
+                "parsing",
+                pptx_filename=pptx_filename,
+                parse_summary=parse_summary,
+            )
+
             resource_manifest = []
-            for resource in build_background_manifest(parsed, available_files):
+            for resource in background_resources:
                 filename = resource["filename"]
                 analysis = None
                 if self._vision_llm:
@@ -187,6 +199,7 @@ class StyleExtractManager:
                 pptx_storage_key=pptx_key,
                 resource_prefix=resource_prefix,
                 resource_manifest=resource_manifest,
+                parse_summary=parse_summary,
                 work_files=work_files,
                 warnings=warnings,
             )

@@ -288,6 +288,7 @@ def _sanitize_result_data(task_type: str, raw: str | dict | None) -> dict:
             "style_name_en",
             "pptx_filename",
             "progress_step",
+            "parse_summary",
             "saved_style_id",
             "error",
         }

@@ -246,7 +246,8 @@ Every presentation must include:
    - Touch/swipe support
    - Mouse wheel navigation
    - Progress bar updates
-   - Navigation dots
+
+   Navigation dots are optional and may be included when they match the chosen style.
 
 2. **Intersection Observer** — For scroll-triggered animations:
    - Add `.visible` class when slides enter viewport
