@@ -72,7 +72,7 @@ FastAPI 通过 `deps.py` 的 `AppContext.from_env()` 创建，LangGraph 通过 `
   - Agent tools: `backend/src/tools/`
   - Skills: `backend/skills/<name>/SKILL.md`
   - Storage: `backend/src/storage/` (database.py / vector_store.py / file_store.py / providers.py)
-  - Prompt templates: `backend/src/managers/prompts/` (system_prompt.md, style_extract_prompt.md, generate_cover_html_prompt.md)
+  - Prompt templates: `backend/src/managers/prompts/` (system_prompt.md, style_slide_understanding_prompt.md, style_merge_template_prompt.md, style_preview_html_prompt.md)
   - Parsers: `backend/src/parsers/` (base.py / pdf / docx / markdown / pptx)
   - Frontend API client: `frontend/src/lib/api.ts` (includes task/share/style URL builders; do not use path-based file URLs)
   - Chat system: `frontend/src/components/chat/` (assistant.tsx 管理连接, `thread/` 渲染消息)
@@ -101,6 +101,7 @@ pnpm build && pnpm start                                    # 生产构建
 - Do not commit or expose `.env`, `backend/.env`, logs, `backend/data/`, `.venv/`, `node_modules/`, or `.next/`.
 - Do not delete runtime data unless the user explicitly asks for cleanup.
 - Avoid broad rewrites. Keep changes scoped to the requested behavior.
+- All public business errors use `BusinessError(BusinessErrorCode.XXX)` from `backend/src/exceptions.py`. Never expose `str(exc)` through APIs, Agent messages, document status, or task result data. See `docs/error-handling.md`.
 - Do not change model defaults, data schemas, or tool availability without calling it out.
 - Do not add network-dependent tests unless they are explicitly marked or isolated.
 - Do not modify `langgraph.json` unless adding new graphs or changing dependencies.
@@ -127,7 +128,7 @@ pnpm build && pnpm start                                    # 生产构建
 - New tools go in `backend/src/tools/`. Use `ToolRuntime[MainAgentState]` for workspace-aware tools.
 - Register middlewares in `backend/src/middlewares/__init__.py` via `create_middlewares(ctx, callback)`. Middleware classes: `ContextInjectMiddleware`, `MessageHistoryMiddleware`, `ModelMessageSanitizerMiddleware`, `SummarizationMiddleware`, `LoggingMiddleware`.
 - System prompt is loaded from `backend/src/managers/prompts/system_prompt.md` via `PromptManager`. Dynamic context (doc summaries, PPT metadata, style description) is injected via `ContextInjectMiddleware`.
-- Style extraction prompts are in `backend/src/managers/prompts/` (style_extract_prompt.md, generate_cover_html_prompt.md). PPTX parsing lives in `backend/src/parsers/pptx_parser.py`.
+- Style extraction uses `StyleExtractManager` + `StyleLLMRunner`: parse PPTX, understand slides sequentially, merge the Markdown template, then generate a read-only preview. It does not use the main Agent graph or a separate LangGraph pipeline. Prompts are `style_slide_understanding_prompt.md`, `style_merge_template_prompt.md`, and `style_preview_html_prompt.md`; parsing lives in `backend/src/parsers/pptx_parser.py`.
 - Agent state (`state.py`) carries: `workspace_id`, `ppt_style`, `voice_id`, `current_ppt_task_id`.
 - PPT styles are stored in `ppt_style` table and served via `GET /api/ppt-styles`. System styles (5 builtin) are seeded at DB init with `sys-` prefixed IDs, custom styles come from style extraction. Each style can have a `resource_manifest` JSON field for visual assets.
 - TTS voices are served via `GET /api/voices` from builtin seed data (`_BUILTIN_VOICES`).

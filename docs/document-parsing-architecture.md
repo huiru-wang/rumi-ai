@@ -139,9 +139,9 @@ Markdown/TXT 先用 `MarkdownParser.parse()` 转成 legacy `DocumentSection`，�
 |------|------|------|
 | FileStore docs 目录 | `{stem}.parsed.json` | 当前文档结构化结果，跟随用户文件存储 |
 | FileStore docs 目录 | `{stem}.md` | 非 Markdown 源文件的结构化 Markdown 导出 |
-| repo `tmp/doc_parse/{doc_id}/` | `{stem}.parsed.json` 和 `{stem}.md` | dev/local/test 环境调试产物 |
+| `{DATA_DIR}/workspace_work/{workspace_id}/doc_parse/{doc_id}/` | `{stem}.parsed.json` 和 `{stem}.md` | dev/local/test 环境调试产物 |
 
-生产环境不会写 repo `tmp/doc_parse` 调试产物，除非 `APP_ENV` 属于 `dev/local/development/test`。
+生产环境不会写 `workspace_work/{workspace_id}/doc_parse` 调试产物，除非 `APP_ENV` 属于 `dev/local/development/test`。
 
 ## 8. 分块与入库
 
@@ -204,6 +204,7 @@ class ChunkWithMetadata:
 1. 遍历删除所有文档和向量。
 2. 删除 workspace collection。
 3. 调用 `FileStore.delete_workspace_async()` 删除本地或 OSS 下的工作区文件。
+4. 删除 `{DATA_DIR}/workspace_work/{workspace_id}` 下的运行期工作文件。
 
 ## 11. RAG 检索
 
@@ -238,5 +239,6 @@ flowchart LR
 - 不要绕过 `DocManager` 直接写 document 状态。
 - 新解析器应输出 `ParsedDocument`，不要新增平行数据结构。
 - 图片资源必须通过 `asset_saver` 进入 FileStore，不要把临时路径写入 block。
+- 业务工作文件必须写入 `{DATA_DIR}/workspace_work/{workspace_id}/...`，不要写 repo `tmp` 或系统 `/tmp`。
 - 解析失败要写入 `status=error` 和 `error_message`，前端依赖这个状态展示。
 - 若新增可前端访问的文档资源，使用 `/api/documents/{doc_id}/asset/{filename}` 这类安全代理，不暴露 FileStore key。

@@ -142,6 +142,7 @@ flowchart TB
 - 定义 Workspace、Document、Task、PptStyleInfo、VoiceInfo、ShareDetail 等类型。
 - 生成预览、音频、分享 URL。
 - 使用 fetch + Blob URL 触发跨域下载。
+- 业务错误统一使用 `BusinessErrorPayload`；REST、Agent metadata 和后台任务错误均展示后端枚举提供的安全 message，不在前端解析 provider 原始异常。
 
 常用方法分组：
 

@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from "react";
 import { X, CheckCircle2, Loader2, Circle, Save, AlertCircle, ArrowLeft } from "lucide-react";
-import { getStyleExtractionPreviewUrl, getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
+import { getBusinessErrorMessage, getStyleExtractionPreviewUrl, getTask, saveStyleFromExtraction, type Task } from "@/lib/api";
 
 interface StyleExtractionDialogProps {
   workspaceId: string;
@@ -182,6 +182,7 @@ export function StyleExtractionDialog({
   const alreadySaved = !!rd?.saved_style_id;
   const isCompleted = task?.status === "completed";
   const isFailed = task?.status === "failed" || task?.status === "cancelled";
+  const errorMessage = getBusinessErrorMessage(rd?.error, "视觉风格提取失败，请稍后重试。");
   const previewUrl = isCompleted ? getStyleExtractionPreviewUrl(taskId) : null;
 
   const openPreview = useCallback(() => {
@@ -284,7 +285,7 @@ export function StyleExtractionDialog({
                 {/* 错误信息内联在失败步骤下 */}
                 {stepStatuses[i] === "error" && isFailed && rd?.error && (
                   <div className="ml-6 mt-1.5 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2">
-                    <p className="text-[11px] text-red-400">{rd.error}</p>
+                    <p className="text-[11px] text-red-400">{errorMessage}</p>
                   </div>
                 )}
 

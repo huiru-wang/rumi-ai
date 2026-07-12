@@ -49,7 +49,7 @@ export default function Home() {
       setNickname(getUserNickname());
       setWorkspaces(data);
     } catch (err) {
-      if (err instanceof ApiError && err.code === 70001) {
+      if (err instanceof ApiError && err.code === 10004) {
         clearInviteUser();
         setUserId(null);
         setNickname(null);

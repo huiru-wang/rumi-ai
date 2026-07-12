@@ -65,7 +65,7 @@ class AppContext:
 
 | 变量 | 用途 |
 |------|------|
-| `DATA_DIR` | SQLite 与本地文件根目录，默认 `./data` |
+| `DATA_DIR` | 项目数据根目录，默认 `./data`；生产环境应显式配置绝对路径，例如 `/data/rumi-ai` |
 | `CHROMA_HOST` / `CHROMA_PORT` | ChromaDB HTTP 服务地址 |
 | `OPENAI_API_KEY` / `OPENAI_API_BASE` / `MAIN_MODEL` | 主 Agent 模型 |
 | `SUMMARIZATION_API_KEY` / `SUMMARIZATION_API_BASE` / `SUMMARIZATION_MODEL` | 文档摘要、对话摘要、风格生成文本模型 |
@@ -107,6 +107,15 @@ user/{user_id}/style/{style_id}/{filename}
 - `/api/files/{path}` 和 `/api/file-view/{path}` 当前返回 410，路径直出已经禁用。
 - 预览和下载必须走 task/share/document/style 级端点，例如 `/api/tasks/{task_id}/preview`、`/api/tasks/{task_id}/audio/{slide_number}`、`/api/documents/{doc_id}/asset/{filename}`。
 - FileStore 保留 legacy absolute path smart routing，用于兼容旧 DB 记录，不应作为新代码设计依赖。
+
+业务运行期工作目录统一从 `DATA_DIR` 派生，不写入 repo `tmp` 或系统 `/tmp`：
+
+```text
+{DATA_DIR}/workspace_work/{workspace_id}/doc_parse/{doc_id}/
+{DATA_DIR}/workspace_work/{workspace_id}/style_extract/{task_id}/
+```
+
+这类目录只存放调试产物、解析解包目录和中间工作文件，不直接暴露给前端。删除 workspace 时会清理对应的 `workspace_work/{workspace_id}`。
 
 ## 6. REST API
 
@@ -217,7 +226,7 @@ uploaded -> parsing -> parsed -> chunking -> indexing -> summarizing -> ready
 
 ## 9. 风格提取
 
-PPTX 风格提取由 FastAPI 后台任务执行，不经过主对话 Agent 工具链。核心类是 `StyleExtractManager`，入口是 `/api/workspaces/{workspace_id}/style-extraction`。其中资产盘点、布局盘点、风格模板生成/校验/修复、预览 HTML 生成/校验/修复封装在 `backend/src/agent/style_extract_graph.py` 的独立 LangGraph pipeline 中，暂不作为 `langgraph.json` 服务图暴露。
+PPTX 风格提取由 FastAPI 后台任务执行，不经过主对话 Agent 工具链。核心类是 `StyleExtractManager`，入口是 `/api/workspaces/{workspace_id}/style-extraction`。链路通过 `StyleLLMRunner` 单线程逐页理解 PPTX，再合并风格模板并生成只读预览 HTML；不创建独立 LangGraph graph。
 
 状态流：
 
@@ -229,6 +238,8 @@ generating(parsing -> analyzing_style -> generating_preview) -> completed
 完整设计见 `docs/style-extraction-architecture.md`。
 
 ## 10. 开发规则
+
+统一异常规范见 `docs/error-handling.md`。所有对外业务异常必须使用 `BusinessError(BusinessErrorCode.XXX)`；原始异常只写日志，禁止将 `str(exc)` 放入 API、Agent 消息、文档状态或任务结果。
 
 - 新 REST 端点放在 `backend/src/api/routes.py`，并通过 `_sanitize_*` 避免泄漏内部路径。
 - 新业务编排优先放在 `backend/src/managers/`，数据库操作集中在 `Database`。

@@ -18,8 +18,9 @@ class PromptManager:
 
     def __init__(self):
         self._viewport_css: str | None = None
-        self._style_prompt_template: str | None = None
-        self._cover_html_prompt_template: str | None = None
+        self._style_slide_prompt_template: str | None = None
+        self._style_merge_prompt_template: str | None = None
+        self._style_preview_prompt_template: str | None = None
         self._system_prompt: str | None = None
         self._page_layout_contract: str | None = None
 
@@ -48,25 +49,13 @@ class PromptManager:
                 self._viewport_css = "/* viewport-base.css not found */"
         return self._viewport_css
 
-    def _get_style_prompt_template(self) -> str:
-        if self._style_prompt_template is None:
-            path = _PROMPTS_DIR / "style_extract_prompt.md"
-            try:
-                self._style_prompt_template = path.read_text(encoding="utf-8")
-            except FileNotFoundError:
-                logger.warning("[PromptManager] style_extract_prompt.md not found at %s", path)
-                self._style_prompt_template = "# ERROR: style_extract_prompt.md not found"
-        return self._style_prompt_template
-
-    def _get_cover_html_prompt_template(self) -> str:
-        if self._cover_html_prompt_template is None:
-            path = _PROMPTS_DIR / "generate_cover_html_prompt.md"
-            try:
-                self._cover_html_prompt_template = path.read_text(encoding="utf-8")
-            except FileNotFoundError:
-                logger.warning("[PromptManager] generate_cover_html_prompt.md not found at %s", path)
-                self._cover_html_prompt_template = "# ERROR: generate_cover_html_prompt.md not found"
-        return self._cover_html_prompt_template
+    def _load_prompt(self, filename: str) -> str:
+        path = _PROMPTS_DIR / filename
+        try:
+            return path.read_text(encoding="utf-8").strip()
+        except FileNotFoundError:
+            logger.error("[PromptManager] prompt not found: %s", path)
+            return f"# ERROR: {filename} not found"
 
     def _get_page_layout_contract(self) -> str:
         if self._page_layout_contract is None:
@@ -86,25 +75,22 @@ class PromptManager:
         """获取 Agent 的静态 system prompt（从 prompts/system_prompt.md 加载）。"""
         return self._get_system_prompt()
 
-    def build_style_description_prompt(self, markdown_text: str) -> str:
-        """构建风格描述 system prompt。
+    def get_style_slide_understanding_prompt(self) -> str:
+        if self._style_slide_prompt_template is None:
+            self._style_slide_prompt_template = self._load_prompt("style_slide_understanding_prompt.md")
+        return self._style_slide_prompt_template
 
-        Args:
-            markdown_text: PPTX 解析后的精准 Markdown 结构报告
-        """
-        template = self._get_style_prompt_template()
-        page_layout_contract = self._get_page_layout_contract()
-        return (
-            f"{template}\n\n"
-            f"---\n\n"
-            f"## 共享页面布局契约\n\n"
-            f"{page_layout_contract}\n\n"
-            f"---\n\n"
-            f"## PPTX 结构化解析报告\n\n"
-            f"{markdown_text}\n"
-        )
+    def get_style_merge_prompt(self) -> str:
+        if self._style_merge_prompt_template is None:
+            self._style_merge_prompt_template = self._load_prompt("style_merge_template_prompt.md")
+        return self._style_merge_prompt_template + "\n\n" + self._get_page_layout_contract()
 
-    def build_preview_html_prompt(
+    def get_style_preview_prompt(self) -> str:
+        if self._style_preview_prompt_template is None:
+            self._style_preview_prompt_template = self._load_prompt("style_preview_html_prompt.md")
+        return self._style_preview_prompt_template
+
+    def build_style_preview_prompt(
         self,
         style_template: str,
         resource_base_url: str = "",
@@ -117,13 +103,15 @@ class PromptManager:
             resource_base_url: 图片资源的基础 URL（无 resource_manifest 时的 fallback）
             resource_manifest: 资源清单，包含文件名、URL 和使用建议
         """
-        template = self._get_cover_html_prompt_template()
+        template = self.get_style_preview_prompt()
         parts = [
             template,
             "",
             "---",
             "",
             f"=== 风格模版（完整内容，必须严格遵循） ===\n{style_template}",
+            "",
+            f"=== Viewport 基础 CSS（吸收必要规则并内联） ===\n{self._get_viewport_css()}",
         ]
 
         if resource_manifest:

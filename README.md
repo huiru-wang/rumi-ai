@@ -51,6 +51,7 @@ RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档
 | `OPENAI_API_KEY` | Agent LLM 推理 + 文档摘要 | **必须** |
 | `OPENAI_API_BASE` | DeepSeek API 地址 | 默认 `https://api.deepseek.com` |
 | `MAIN_MODEL` | Agent 主模型 | 默认 `deepseek-v4-flash` |
+| `DATA_DIR` | 项目数据根目录，包含 SQLite、Chroma、本地文件和 workspace 工作目录 | 默认 `./data`，生产建议 `/data/rumi-ai` |
 | `PUBLIC_API_BASE` | 对外可访问的 FastAPI 地址，用于生成 PPT 图片资源代理 URL | 默认 `http://localhost:8000` |
 | `INVITE_CODES_FILE` | 邀请码映射文件路径，热更新生效 | 默认 `./data/invites.json` |
 | `EMBEDDING_API_KEY` | 向量 Embedding（Dashscope） | **必须** |
@@ -194,7 +195,7 @@ cd frontend && pnpm lint && pnpm build
 
 # 生产环境：前端 3000，内部服务绑定 127.0.0.1，由 Nginx 反代 rumi.robinverse.me
 cp backend/.env.production.example backend/.env.production
-# 编辑 backend/.env.production，填入生产 API Key / OSS / DATA_DIR 等配置
+# 编辑 backend/.env.production，填入生产 API Key / OSS / DATA_DIR 等配置；DATA_DIR 建议使用绝对路径，如 /data/rumi-ai
 ./scripts/doctor.sh prod
 ./scripts/start.sh prod
 ```

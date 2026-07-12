@@ -1,290 +1,250 @@
-"""Style extraction manager: parse PPTX -> LLM style template -> LLM preview HTML."""
+"""Style extraction manager: parse PPTX -> per-slide understanding -> style -> preview."""
 
 import asyncio
 import json
 import logging
 import os
 import re
-import tempfile
 from pathlib import Path
 
 from langchain_core.messages import AIMessage, HumanMessage, SystemMessage
 from langchain_openai import ChatOpenAI
 
-from src.agent.style_extract_graph import create_style_extract_graph, resolve_style_name_en
+from src.exceptions import BusinessError, BusinessErrorCode
 from src.managers.prompt_manager import PromptManager
+from src.managers.style_extract_utils import (
+    PAGE_TYPES,
+    parse_frontmatter,
+    resolve_style_name_en,
+    validate_preview_html,
+    validate_style_description,
+)
+from src.managers.style_llm_runner import StyleLLMRunner
+from src.parsers.pptx_parser import parse_pptx_to_structured, write_parse_outputs
 from src.storage.database import Database
 from src.storage.file_store import FileStore
+from src.storage.workspace_paths import reset_dir, style_extract_dir
 from src.url_utils import build_style_extraction_resource_url, build_style_resource_url
 
 logger = logging.getLogger(__name__)
 
-from src.parsers.pptx_parser import parse_pptx_to_markdown as _parse_pptx_to_markdown
+_EXCLUDED_PAGE_TEXT = re.compile(r"授权|版权|来源|素材|下载|水印|license|copyright|source", re.I)
 
 
-# ============================================================
-# Resource Analysis Helpers
-# ============================================================
-def _extract_visual_resources(markdown_text: str, media_files: dict[str, str] | None = None) -> list[dict]:
-    """Extract background image filenames and their slide usage from Markdown.
+def _target_filename(target: str) -> str:
+    return Path(target.replace("\\", "/")).name
 
-    Parses patterns like:
-        ## 第 1 页
-        ### 背景
-        背景图片： `../media/Slide-1-image-1.png`
 
-    Ordinary picture/icon resources are intentionally ignored at this stage.
-    Returns list of {"filename": "image.png", "slides": [1], "usage_type": "background"}.
-    """
-    current_slide = None
-    resource_map: dict[str, dict] = {}
+def build_background_manifest(parsed: dict, available_files: set[str] | None = None) -> list[dict]:
+    """Build a background-only manifest from structured slide data."""
+    page_size = parsed.get("deck_meta", {}).get("page_size", {})
+    page_width = float(page_size.get("width") or 0)
+    page_height = float(page_size.get("height") or 0)
+    resources: dict[str, set[int]] = {}
 
-    def record(filename: str):
-        if not filename:
-            return
-        item = resource_map.setdefault(
-            filename,
-            {"filename": filename, "slides": set(), "usage_types": {"background"}},
+    for slide in parsed.get("slides", []):
+        slide_no = int(slide.get("slide_no") or 0)
+        text = " ".join(
+            str(shape.get("text", {}).get("fullText", ""))
+            for shape in slide.get("shapes", [])
         )
-        if current_slide is not None:
-            item["slides"].add(current_slide)
-
-    for line in markdown_text.split("\n"):
-        line_stripped = line.strip()
-        slide_match = re.match(r"## 第 (\d+) 页", line_stripped)
-        if slide_match:
-            current_slide = int(slide_match.group(1))
+        if _EXCLUDED_PAGE_TEXT.search(text):
             continue
 
-        bg_match = re.search(r"背景图片[：:]\s*`([^`]+)`", line_stripped)
-        if bg_match and current_slide is not None:
-            path = bg_match.group(1)
-            record(path.split("/")[-1])
+        filenames: set[str] = set()
+        background = slide.get("background") or {}
+        if background.get("type") == "image" and background.get("target"):
+            filenames.add(_target_filename(background["target"]))
 
-    resources = []
-    for filename in sorted(resource_map):
-        item = resource_map[filename]
-        usage_types = sorted(item["usage_types"])
-        resources.append({
+        for shape in slide.get("shapes", []):
+            fill = shape.get("fill") or {}
+            if shape.get("kind") != "pic" or fill.get("type") != "image" or not fill.get("target"):
+                continue
+            if not page_width or not page_height:
+                continue
+            width = float(shape.get("width") or 0)
+            height = float(shape.get("height") or 0)
+            x = float(shape.get("x") or 0)
+            y = float(shape.get("y") or 0)
+            if width >= page_width * 0.9 and height >= page_height * 0.9 and x <= page_width * 0.05 and y <= page_height * 0.05:
+                filenames.add(_target_filename(fill["target"]))
+
+        for filename in filenames:
+            if available_files is None or filename in available_files:
+                resources.setdefault(filename, set()).add(slide_no)
+
+    return [
+        {
             "filename": filename,
-            "slides": sorted(item["slides"]),
+            "slides": sorted(slides),
             "usage_type": "background",
-            "usage_types": usage_types,
-        })
-    return resources
-
-
-def _build_resource_section(resource_manifest: list[dict]) -> str:
-    """Build a Markdown resource description section to append to the PPTX report."""
-    lines = [
-        "## 资源描述",
-        "",
-        "以下是从 PPTX 中提取的视觉资源及其视觉分析。生成风格模板时，必须判断哪些资源应进入风格模板或预览 HTML。",
-        "",
+        }
+        for filename, slides in sorted(resources.items())
     ]
 
-    for res in resource_manifest:
-        filename = res["filename"]
-        url = res["url"]
-        slides = res.get("used_in_slides", [])
-        desc = res.get("description", {})
 
-        lines.append(f"### {filename}")
-        lines.append(f"- **URL**：`{url}`")
-        if slides:
-            slide_str = ", ".join(str(s) for s in slides)
-            lines.append(f"- **使用页面**：第 {slide_str} 页")
-        if res.get("usage_type"):
-            lines.append(f"- **资源类型**：{res['usage_type']}")
-        if desc.get("style"):
-            lines.append(f"- **风格**：{desc['style']}")
-        if desc.get("visual_theme"):
-            lines.append(f"- **视觉主题**：{desc['visual_theme']}")
-        if desc.get("color_tone"):
-            lines.append(f"- **色调**：{desc['color_tone']}")
-        if desc.get("composition"):
-            lines.append(f"- **构图**：{desc['composition']}")
-        if desc.get("safe_zones"):
-            lines.append(f"- **安全区**：{desc['safe_zones']}")
-        if desc.get("usage_notes"):
-            lines.append(f"- **使用建议**：{desc['usage_notes']}")
-        lines.append("")
-
-    return "\n".join(lines)
+def _fallback_understanding(slide: dict, error: Exception) -> dict:
+    slide_no = int(slide.get("slide_no") or 0)
+    return {
+        "slide_no": slide_no,
+        "page_type": "cover" if slide_no == 1 else "content",
+        "page_type_confidence": 0,
+        "layout_family": "parser_fallback",
+        "visual_role": "other",
+        "composition": {"structure": "由结构化解析结果降级生成", "density": "medium", "hierarchy": [], "safe_zones": ""},
+        "color_usage": {"background": [], "surface": [], "text": [], "accent": [], "notes": ""},
+        "typography_usage": {"title_style": "", "body_style": "", "notes": ""},
+        "assets": [],
+        "signature_elements": [],
+        "merge_hints": [],
+        "quality_notes": [f"单页理解失败：{type(error).__name__}"],
+    }
 
 
 class StyleExtractManager:
-    """管理 PPTX 风格提取的完整异步工作流。"""
+    """Manage the complete asynchronous PPTX style extraction workflow."""
 
-    def __init__(self, db: Database, file_store: FileStore):
+    def __init__(
+        self,
+        db: Database,
+        file_store: FileStore,
+        llm_runner: StyleLLMRunner | None = None,
+        prompt_manager: PromptManager | None = None,
+    ):
         self.db = db
         self.file_store = file_store
-        self._prompt_manager = PromptManager()
+        self._prompt_manager = prompt_manager or PromptManager()
+        self._llm_runner = llm_runner or StyleLLMRunner()
         self._active_tasks: dict[str, asyncio.Event] = {}
-        # 纯文本 LLM: 用于 style_description 和 preview_html 生成
-        self._text_llm = ChatOpenAI(
-            model=os.getenv("SUMMARIZATION_MODEL"),
-            api_key=os.getenv("SUMMARIZATION_API_KEY"),
-            base_url=os.getenv("SUMMARIZATION_API_BASE"),
-        )
-        # 视觉 LLM: 用于背景图片分析（仅在公开 URL 可用时启用）
-        _vision_model = os.getenv("VISION_MODEL")
-        if _vision_model:
-            self._vision_llm = ChatOpenAI(
-                model=_vision_model,
-                api_key=os.getenv("VISION_API_KEY"),
-                base_url=os.getenv("VISION_API_BASE"),
-            )
-        else:
-            self._vision_llm = None
-
-    # ------------------------------------------------------------------
-    # Public API
-    # ------------------------------------------------------------------
+        vision_model = os.getenv("VISION_MODEL")
+        self._vision_llm = ChatOpenAI(
+            model=vision_model,
+            api_key=os.getenv("VISION_API_KEY"),
+            base_url=os.getenv("VISION_API_BASE"),
+        ) if vision_model else None
 
     async def run_extraction(self, task_id: str, workspace_id: str, pptx_content: bytes, pptx_filename: str):
-        """异步执行完整风格提取工作流。
-
-        Steps:
-        1. parsing — 保存源 PPTX + 解析为 Markdown + 提取图片资源
-        2. analyzing_style — LLM 生成风格模板（Markdown + frontmatter）
-        3. generating_preview — LLM 生成预览 HTML
-        4. completed — 保存产出文件
-        """
         cancel_event = asyncio.Event()
         self._active_tasks[task_id] = cancel_event
-
+        warnings: list[str] = []
         try:
-            # --- Step 1: Save source PPTX + Parse + Extract images ---
             await self._check_cancel(cancel_event)
             await self._update_progress(task_id, "parsing", pptx_filename=pptx_filename)
 
-            # Resolve user_id for path construction
             user_id = await self.file_store._resolve_user_id(workspace_id)
             ws_prefix = self.file_store._ws_prefix(user_id, workspace_id)
-
-            # Save source PPTX to: user/{user_id}/workspace/{workspace_id}/style/{task_id}/{pptx_filename}
-            pptx_key = f"{ws_prefix}/style/{task_id}/{pptx_filename}"
-            await self.file_store._provider.save_async(pptx_key, pptx_content)
-            logger.info("[StyleExtract] saved source PPTX: %s", pptx_key)
-
-            # Determine resource base URL for image paths in Markdown
             resource_prefix = f"{ws_prefix}/style/{task_id}"
-            if self.file_store._provider.is_local:
-                # Local mode: use the served file URL pattern
-                resource_base_url = ""  # Keep original relative paths
-            else:
-                # OSS mode: use public URL for the resource directory
-                resource_base_url = self.file_store._provider.get_public_url(resource_prefix)
+            pptx_key = f"{resource_prefix}/source.pptx"
+            await self.file_store._provider.save_async(pptx_key, pptx_content)
 
-            # Parse PPTX to Markdown, extracting images to temp resource dir
-            with tempfile.TemporaryDirectory(prefix="style_extract_") as tmp_dir:
-                tmp_pptx = Path(tmp_dir) / pptx_filename
-                tmp_pptx.write_bytes(pptx_content)
+            work_dir = reset_dir(style_extract_dir(workspace_id, task_id))
+            source_dir = work_dir / "source"
+            source_dir.mkdir(parents=True, exist_ok=True)
+            source_pptx = source_dir / "source.pptx"
+            source_pptx.write_bytes(pptx_content)
 
-                markdown_text, media_files = await asyncio.to_thread(
-                    _parse_pptx_to_markdown,
-                    str(tmp_pptx),
-                    tmp_dir,
-                    resource_base_url,
-                )
-
-                # Upload extracted images to FileStore: style/{task_id}/resource/{filename}
-                resource_dir = Path(tmp_dir) / "resource"
-                if resource_dir.exists():
-                    for img_file in sorted(resource_dir.iterdir()):
-                        if img_file.is_file():
-                            img_key = f"{resource_prefix}/resource/{img_file.name}"
-                            img_content = img_file.read_bytes()
-                            await self.file_store._provider.save_async(img_key, img_content)
-                            logger.debug("[StyleExtract] uploaded resource: %s", img_key)
-
-            logger.info(f"[StyleExtract] PARSED task={task_id} ppt_markdown={markdown_text} media_files={media_files}")
-
-            # --- Step 1.5: Build background resource manifest ---
-            resource_manifest: list[dict] = []
-            visual_resources = _extract_visual_resources(markdown_text, media_files)
-            if visual_resources:
-                logger.info("[StyleExtract] background resources found: %d", len(visual_resources))
-                for res in visual_resources:
-                    filename = res["filename"]
-                    img_url = build_style_extraction_resource_url(task_id, filename)
-                    analysis = None
-                    if self._vision_llm:
-                        img_key = f"{resource_prefix}/resource/{filename}"
-                        signed_url = self.file_store._provider.get_url(img_key)
-                        analysis = await self._analyze_image_resource(signed_url, filename)
-                        if analysis:
-                            logger.info("[StyleExtract] image analysis: file=%s analysis=%s", filename, analysis)
-                    resource_manifest.append({
-                        "filename": filename,
-                        "url": img_url,
-                        "used_in_slides": res["slides"],
-                        "usage_type": res.get("usage_type", "image"),
-                        "usage_types": res.get("usage_types", []),
-                        "description": analysis or {},
-                    })
-
-                resource_section = _build_resource_section(resource_manifest)
-                markdown_text = markdown_text.rstrip() + "\n\n" + resource_section
-                logger.info("[StyleExtract] appended resource section: %d resources, md_len=%d", len(resource_manifest), len(markdown_text))
-            else:
-                logger.info("[StyleExtract] no background resources found")
-
-            # --- Step 2-3: Agent Graph — Style Template + Preview HTML ---
-            await self._check_cancel(cancel_event)
-            await self._update_progress(task_id, "analyzing_style", pptx_filename=pptx_filename)
-
-            async def _before_preview(state: dict):
-                await self._check_cancel(cancel_event)
-                await self._update_progress(
-                    task_id,
-                    "generating_preview",
-                    pptx_filename=pptx_filename,
-                    description=state.get("description", ""),
-                    style_description=state.get("style_description", ""),
-                    style_name=state.get("style_name", ""),
-                    style_name_en=state.get("style_name_en", ""),
-                )
-
-            style_graph = create_style_extract_graph(
-                self._text_llm,
-                self._prompt_manager,
-                on_before_preview=_before_preview,
+            parsed = await asyncio.to_thread(
+                parse_pptx_to_structured,
+                str(source_pptx),
+                str(work_dir),
+                str(work_dir / "pptx_unpack"),
             )
-            graph_result = await style_graph.ainvoke({
-                "markdown_text": markdown_text,
-                "resource_base_url": resource_base_url,
-                "resource_manifest": resource_manifest,
-            })
+            _, parsed_json, parsed_md = write_parse_outputs(parsed, str(work_dir))
 
-            raw_style_output = graph_result.get("raw_style_output", "")
-            style_name = graph_result.get("style_name") or "未命名风格"
-            style_name_en = graph_result.get("style_name_en") or resolve_style_name_en("", style_name)
-            description = graph_result.get("description", "")
-            style_description = graph_result.get("style_description", "")
-            preview_html = graph_result.get("preview_html", "")
-            style_validation_errors = graph_result.get("style_validation_errors", [])
-            preview_validation_errors = graph_result.get("preview_validation_errors", [])
-            if style_validation_errors or preview_validation_errors:
-                logger.warning(
-                    "[StyleExtract] graph validation warnings task=%s style=%s preview=%s",
-                    task_id,
-                    style_validation_errors,
-                    preview_validation_errors,
+            resource_dir = work_dir / "resource"
+            available_files = {path.name for path in resource_dir.iterdir() if path.is_file()} if resource_dir.exists() else set()
+            for filename in sorted(available_files):
+                await self.file_store._provider.save_async(
+                    f"{resource_prefix}/resource/{filename}",
+                    (resource_dir / filename).read_bytes(),
                 )
 
-            logger.info(f"[StyleExtract] STYLE_TEMPLATE task={task_id} style_template={raw_style_output}")
-            logger.info(f"[StyleExtract] PREVIEW_HTML task={task_id}")
+            resource_manifest = []
+            for resource in build_background_manifest(parsed, available_files):
+                filename = resource["filename"]
+                analysis = None
+                if self._vision_llm:
+                    signed_url = self.file_store._provider.get_url(f"{resource_prefix}/resource/{filename}")
+                    analysis = await self._analyze_image_resource(signed_url, filename)
+                resource_manifest.append({
+                    "filename": filename,
+                    "url": build_style_extraction_resource_url(task_id, filename),
+                    "used_in_slides": resource["slides"],
+                    "usage_type": "background",
+                    "description": analysis or {},
+                })
 
-            # --- Step 4: Save & Complete ---
+            work_files = {
+                "parsed_json": str(parsed_json),
+                "parsed_md": str(parsed_md),
+                "slide_understandings": str(work_dir / "slide_understandings.json"),
+                "style_template": str(work_dir / "style_template.md"),
+            }
+            await self._update_progress(
+                task_id,
+                "analyzing_style",
+                pptx_filename=pptx_filename,
+                pptx_storage_key=pptx_key,
+                resource_prefix=resource_prefix,
+                resource_manifest=resource_manifest,
+                work_files=work_files,
+                warnings=warnings,
+            )
+
+            understandings = await self._understand_slides_sequentially(
+                task_id, parsed, resource_manifest, work_dir, cancel_event, warnings
+            )
+            raw_style_output = await self._merge_style_template(parsed, understandings, resource_manifest)
+            parsed_style = parse_frontmatter(raw_style_output)
+            style_name = parsed_style["name"] or "未命名风格"
+            style_name_en = resolve_style_name_en(parsed_style["name_en"], style_name)
+            description = parsed_style["description"]
+            style_description = parsed_style["style_description"]
+
+            style_errors = validate_style_description(style_description, style_name, description)
+            if style_errors:
+                warnings.extend(f"风格模板校验：{error}" for error in style_errors)
+                raw_style_output = await self._repair_style(raw_style_output, style_errors, understandings, resource_manifest)
+                parsed_style = parse_frontmatter(raw_style_output)
+                style_name = parsed_style["name"] or style_name
+                style_name_en = resolve_style_name_en(parsed_style["name_en"], style_name)
+                description = parsed_style["description"] or description
+                style_description = parsed_style["style_description"]
+                remaining = validate_style_description(style_description, style_name, description)
+                if remaining:
+                    raise BusinessError(
+                        BusinessErrorCode.STYLE_EXTRACTION_TEMPLATE_INVALID,
+                        stage="style_template_repair",
+                    )
+
+            (work_dir / "style_template.md").write_text(raw_style_output, encoding="utf-8")
             await self._check_cancel(cancel_event)
+            await self._update_progress(
+                task_id,
+                "generating_preview",
+                description=description,
+                style_description=style_description,
+                style_name=style_name,
+                style_name_en=style_name_en,
+                warnings=warnings,
+            )
 
-            # Save preview HTML to: user/{user_id}/workspace/{workspace_id}/style/{task_id}/preview.html
+            preview_html = await self._generate_preview_html(style_description, resource_manifest)
+            preview_errors = validate_preview_html(preview_html, style_description)
+            if preview_errors:
+                warnings.extend(f"预览校验：{error}" for error in preview_errors)
+                preview_html = await self._repair_preview(preview_html, preview_errors, style_description, resource_manifest)
+                remaining = validate_preview_html(preview_html, style_description)
+                if remaining:
+                    raise BusinessError(
+                        BusinessErrorCode.STYLE_EXTRACTION_PREVIEW_INVALID,
+                        stage="preview_repair",
+                    )
+
+            (work_dir / "preview.html").write_text(preview_html, encoding="utf-8")
             preview_path = await self.file_store.save_style_output(
                 workspace_id, task_id, "preview.html", preview_html.encode("utf-8")
             )
-
             result_data = {
                 "description": description,
                 "style_description": style_description,
@@ -295,6 +255,8 @@ class StyleExtractManager:
                 "pptx_storage_key": pptx_key,
                 "resource_prefix": resource_prefix,
                 "resource_manifest": resource_manifest,
+                "work_files": work_files,
+                "warnings": warnings,
                 "progress_step": "completed",
             }
             await self.db.update_task(
@@ -303,21 +265,140 @@ class StyleExtractManager:
                 title=style_name,
                 result_data=json.dumps(result_data, ensure_ascii=False),
             )
-            logger.info("[StyleExtract] COMPLETED task=%s style_name=%s", task_id, style_name)
-
         except _CancelledError:
-            logger.info("[StyleExtract] task=%s cancelled", task_id)
             await self.db.update_task(task_id, status="cancelled")
         except Exception as exc:
             logger.error("[StyleExtract] task=%s failed: %s", task_id, exc, exc_info=True)
-            error_data = {"error": str(exc), "pptx_filename": pptx_filename, "progress_step": "failed"}
+            error = exc if isinstance(exc, BusinessError) else BusinessError(
+                BusinessErrorCode.STYLE_EXTRACTION_UNKNOWN
+            )
+            error_data = await self.db.get_task_result_data(task_id)
+            error_data.update({
+                "error": error.to_dict(),
+                "pptx_filename": pptx_filename,
+                "warnings": warnings,
+                "progress_step": "failed",
+            })
             await self.db.update_task(
-                task_id, status="failed",
+                task_id,
+                status="failed",
                 result_data=json.dumps(error_data, ensure_ascii=False),
             )
         finally:
             self._active_tasks.pop(task_id, None)
 
+    async def _understand_slides_sequentially(
+        self,
+        task_id: str,
+        parsed: dict,
+        resource_manifest: list[dict],
+        work_dir: Path,
+        cancel_event: asyncio.Event,
+        warnings: list[str],
+    ) -> list[dict]:
+        understandings: list[dict] = []
+        slides = parsed.get("slides", [])
+        deck_context = {
+            "deck_meta": parsed.get("deck_meta", {}),
+            "theme": parsed.get("theme", {}),
+            "warnings": parsed.get("warnings", []),
+        }
+        for index, slide in enumerate(slides):
+            await self._check_cancel(cancel_event)
+            slide_no = int(slide.get("slide_no") or index + 1)
+            user_prompt = (
+                f"请分析第 {slide_no} 页并输出 JSON。\n\n"
+                f"deck_context:\n{json.dumps(deck_context, ensure_ascii=False)}\n\n"
+                f"slide_data:\n{json.dumps(slide, ensure_ascii=False)}\n\n"
+                f"resource_manifest:\n{json.dumps(resource_manifest, ensure_ascii=False)}\n\n"
+                f"previous_page_type_hint:\n{understandings[-1].get('page_type', '') if understandings else ''}"
+            )
+            try:
+                result = await self._llm_runner.invoke_json(
+                    system_prompt=self._prompt_manager.get_style_slide_understanding_prompt(),
+                    user_prompt=user_prompt,
+                    purpose=f"style_slide_understanding:{slide_no}",
+                )
+                result["slide_no"] = slide_no
+                if result.get("page_type") not in (*PAGE_TYPES, "exclude"):
+                    raise BusinessError(
+                        BusinessErrorCode.STYLE_EXTRACTION_OUTPUT_INVALID,
+                        stage=f"slide_understanding:{slide_no}",
+                    )
+            except BusinessError as exc:
+                if exc.error in {
+                    BusinessErrorCode.STYLE_EXTRACTION_MODEL_AUTH,
+                    BusinessErrorCode.STYLE_EXTRACTION_MODEL_QUOTA,
+                    BusinessErrorCode.STYLE_EXTRACTION_MODEL_RATE_LIMIT,
+                    BusinessErrorCode.STYLE_EXTRACTION_MODEL_TIMEOUT,
+                    BusinessErrorCode.STYLE_EXTRACTION_MODEL_CONNECTION,
+                }:
+                    raise
+                logger.warning("[StyleExtract] slide %s fallback: code=%s", slide_no, exc.code)
+                warnings.append(f"第 {slide_no} 页理解失败，已使用结构化降级结果")
+                result = _fallback_understanding(slide, exc)
+            except Exception as exc:
+                logger.warning("[StyleExtract] slide %s fallback: %s", slide_no, exc)
+                warnings.append(f"第 {slide_no} 页理解失败，已使用结构化降级结果")
+                result = _fallback_understanding(slide, exc)
+            understandings.append(result)
+            (work_dir / "slide_understandings.json").write_text(
+                json.dumps(understandings, ensure_ascii=False, indent=2), encoding="utf-8"
+            )
+            await self._update_progress(
+                task_id,
+                "analyzing_style",
+                current_slide=slide_no,
+                total_slides=len(slides),
+                warnings=warnings,
+            )
+        return understandings
+
+    async def _merge_style_template(self, parsed: dict, understandings: list[dict], resource_manifest: list[dict]) -> str:
+        included = [item for item in understandings if item.get("page_type") != "exclude"]
+        user_prompt = (
+            "请生成完整 PPT 风格模板。\n\n"
+            f"deck_summary:\n{json.dumps({'deck_meta': parsed.get('deck_meta'), 'theme': parsed.get('theme')}, ensure_ascii=False)}\n\n"
+            f"slide_understandings:\n{json.dumps(included, ensure_ascii=False)}\n\n"
+            f"resource_manifest:\n{json.dumps(resource_manifest, ensure_ascii=False)}\n\n"
+            f"parser_notes:\n{json.dumps(parsed.get('warnings', []), ensure_ascii=False)}"
+        )
+        return await self._llm_runner.invoke_text(
+            system_prompt=self._prompt_manager.get_style_merge_prompt(),
+            user_prompt=user_prompt,
+            purpose="style_merge_template",
+        )
+
+    async def _repair_style(self, original: str, errors: list[str], understandings: list[dict], resource_manifest: list[dict]) -> str:
+        return await self._llm_runner.invoke_text(
+            system_prompt=self._prompt_manager.get_style_merge_prompt(),
+            user_prompt=(
+                "修复以下风格模板，只输出修复后的完整 Markdown。正文允许 fenced code block。\n"
+                f"校验错误：{json.dumps(errors, ensure_ascii=False)}\n"
+                f"逐页理解：{json.dumps(understandings, ensure_ascii=False)}\n"
+                f"背景资源：{json.dumps(resource_manifest, ensure_ascii=False)}\n"
+                f"原模板：\n{original}"
+            ),
+            purpose="style_merge_repair",
+        )
+
+    async def _generate_preview_html(self, style_description: str, resource_manifest: list[dict]) -> str:
+        return await self._llm_runner.invoke_html(
+            system_prompt=self._prompt_manager.build_style_preview_prompt(style_description, "", resource_manifest),
+            user_prompt="生成完整只读预览 HTML，覆盖全部启用页面类型和关键布局变体。",
+            purpose="style_preview_html",
+        )
+
+    async def _repair_preview(self, original: str, errors: list[str], style_description: str, resource_manifest: list[dict]) -> str:
+        return await self._llm_runner.invoke_html(
+            system_prompt=self._prompt_manager.build_style_preview_prompt(style_description, "", resource_manifest),
+            user_prompt=(
+                "修复以下 HTML，只输出完整 HTML。\n"
+                f"校验错误：{json.dumps(errors, ensure_ascii=False)}\n"
+                f"原 HTML：\n{original}"
+            ),
+            purpose="style_preview_repair",
+        )
     async def cancel_extraction(self, task_id: str):
         """中断正在执行的工作流。"""
         event = self._active_tasks.get(task_id)
@@ -334,19 +415,19 @@ class StyleExtractManager:
         await self.db.ensure_initialized()
         task = await self.db.get_task(task_id)
         if not task:
-            raise ValueError(f"Task not found: {task_id}")
+            raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
         if task["status"] != "completed":
-            raise ValueError(f"Task not completed: {task_id} (status={task['status']})")
+            raise BusinessError(BusinessErrorCode.TASK_NOT_COMPLETED)
 
         result_data = task.get("result_data")
         if isinstance(result_data, str):
             result_data = json.loads(result_data)
         if not result_data:
-            raise ValueError(f"Task has no result_data: {task_id}")
+            raise BusinessError(BusinessErrorCode.TASK_NOT_COMPLETED)
 
         # Duplicate save check
         if result_data.get("saved_style_id"):
-            raise ValueError("该风格已保存，请勿重复操作")
+            raise BusinessError(BusinessErrorCode.STYLE_ALREADY_SAVED)
 
         style_name = result_data.get("style_name", "未命名风格")
         style_name_en = result_data.get("style_name_en", "unnamed-style")
@@ -429,7 +510,6 @@ class StyleExtractManager:
         # Update resource manifest URLs and style_description after migration
         resource_manifest = result_data.get("resource_manifest", [])
         if resource_manifest and resource_prefix:
-            old_resource_base = f"{resource_prefix}/resource/"
             # Frontend-facing resources must go through the API proxy; never
             # persist OSS public URLs or object keys into style metadata.
 

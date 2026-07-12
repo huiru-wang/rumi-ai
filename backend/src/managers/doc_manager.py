@@ -9,6 +9,7 @@ from pathlib import Path
 
 from langchain_openai import ChatOpenAI
 
+from src.exceptions import BusinessError, BusinessErrorCode
 from src.parsers import PdfParser, DocxParser, MarkdownParser
 from src.managers.vision_manager import VisionManager
 from src.parsers.base import (
@@ -20,6 +21,7 @@ from src.parsers.base import (
 from src.storage.database import Database
 from src.storage.file_store import FileStore
 from src.storage.vector_store import VectorStore
+from src.storage.workspace_paths import delete_workspace_work_dir, doc_parse_dir
 
 logger = logging.getLogger(__name__)
 
@@ -82,14 +84,6 @@ def merge_progress_percent(progress: dict, previous_progress: dict | None) -> di
     return progress
 
 
-class DuplicateDocumentError(ValueError):
-    """Raised when a duplicate document is detected during upload."""
-
-    def __init__(self, message: str, existing_doc_id: str = ""):
-        super().__init__(message)
-        self.existing_doc_id = existing_doc_id
-
-
 class DocManager:
     def __init__(
         self,
@@ -135,15 +129,9 @@ class DocManager:
         )
         if duplicate:
             if duplicate["filename"] == filename:
-                raise DuplicateDocumentError(
-                    f"文档 '{filename}' 已存在，请勿重复上传。如需更新请先删除旧文档。",
-                    existing_doc_id=duplicate["id"],
-                )
+                raise BusinessError(BusinessErrorCode.DOCUMENT_DUPLICATE_NAME)
             else:
-                raise DuplicateDocumentError(
-                    f"与已有文档 '{duplicate['filename']}' 内容完全相同，无需重复上传。",
-                    existing_doc_id=duplicate["id"],
-                )
+                raise BusinessError(BusinessErrorCode.DOCUMENT_DUPLICATE_HASH)
 
         storage_path = await self.file_store.save_doc(workspace_id, filename, content)
         logger.info("[DocManager] file saved to: %s", storage_path)
@@ -241,6 +229,7 @@ class DocManager:
             )
             logger.info("[DocManager] parsed json saved: path=%s", parsed_path)
             self._save_dev_parse_artifacts(
+                workspace_id=workspace_id,
                 doc_id=doc_id,
                 filename=filename,
                 parsed_json_content=parsed_json_content,
@@ -334,14 +323,17 @@ class DocManager:
             logger.error(
                 "[DocManager] upload failed for %s: %s", filename, exc, exc_info=True
             )
+            error = exc if isinstance(exc, BusinessError) else BusinessError(
+                BusinessErrorCode.DOCUMENT_PARSE_FAILED
+            )
             await self._update_progress(
                 doc_id,
                 "error",
-                message=str(exc),
-                extra_updates={"error_message": str(exc)},
+                message=error.message,
+                extra_updates={"error_message": error.message},
             )
             doc["status"] = "error"
-            doc["error_message"] = str(exc)
+            doc["error_message"] = error.message
         return doc
 
     async def _get_document_by_id(self, doc_id: str) -> dict | None:
@@ -455,6 +447,7 @@ class DocManager:
         self.vector_store.delete_workspace(workspace_id)
         # Delete file store directory (handles both local and OSS)
         await self.file_store.delete_workspace_async(workspace_id)
+        delete_workspace_work_dir(workspace_id)
 
     async def delete_document(self, workspace_id: str, doc_id: str):
         docs = await self.db.list_documents(workspace_id)
@@ -533,6 +526,7 @@ class DocManager:
     def _save_dev_parse_artifacts(
         self,
         *,
+        workspace_id: str,
         doc_id: str,
         filename: str,
         parsed_json_content: str,
@@ -544,8 +538,7 @@ class DocManager:
 
         stem = Path(filename).stem or "document"
         safe_stem = re.sub(r'[\\/:*?"<>|]+', "_", stem).strip() or "document"
-        repo_root = Path(__file__).resolve().parents[3]
-        output_dir = repo_root / "tmp" / "doc_parse" / doc_id
+        output_dir = doc_parse_dir(workspace_id, doc_id)
         output_dir.mkdir(parents=True, exist_ok=True)
 
         parsed_path = output_dir / f"{safe_stem}.parsed.json"

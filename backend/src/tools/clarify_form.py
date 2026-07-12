@@ -27,6 +27,23 @@ class ClarifyFormInput(BaseModel):
     fields: list[FormField] = Field(description="表单字段列表")
 
 
+def normalize_form_fields(fields: list[dict]) -> list[dict]:
+    """Keep reserved workflow fields stable across repeated agent calls."""
+    normalized = []
+    for field in fields:
+        item = dict(field)
+        if item.get("name") == "outline_confirmation":
+            item.update({
+                "type": "select",
+                "options": ["确认"],
+                "recommended": ["确认"],
+                "allow_custom": True,
+                "required": True,
+            })
+        normalized.append(item)
+    return normalized
+
+
 @tool(args_schema=ClarifyFormInput)
 def clarify_form(title: str, description: str, fields: list[dict], **kwargs) -> str:
     """向用户展示一个表单来收集信息。当需要用户澄清意图、选择选项或提供详细参数时使用此工具。
@@ -52,7 +69,7 @@ def clarify_form(title: str, description: str, fields: list[dict], **kwargs) -> 
     user_response = interrupt({
         "title": title,
         "description": description,
-        "fields": fields,
+        "fields": normalize_form_fields(fields),
     })
 
     # User cancelled the form

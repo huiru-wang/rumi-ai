@@ -6,15 +6,9 @@ import os
 
 import httpx
 
+from src.exceptions import BusinessError, BusinessErrorCode
+
 logger = logging.getLogger(__name__)
-
-
-class TTSManagerError(Exception):
-    """Raised when TTS API call fails."""
-
-    def __init__(self, status_code: int, message: str):
-        self.status_code = status_code
-        super().__init__(f"TTS API error ({status_code}): {message}")
 
 
 class TTSManager:
@@ -40,11 +34,10 @@ class TTSManager:
             Raw audio bytes (mp3/wav).
 
         Raises:
-            TTSManagerError: If the API call fails.
-            RuntimeError: If TTS is not configured.
+            BusinessError: If TTS is unavailable or the API call fails.
         """
         if not self.is_configured:
-            raise RuntimeError("TTS manager not configured: missing TTS_API_BASE or TTS_API_KEY")
+            raise BusinessError(BusinessErrorCode.TTS_FAILED)
 
         payload = {
             "model": self.model,
@@ -69,7 +62,7 @@ class TTSManager:
             if response.status_code != 200:
                 error_msg = response.text[:500]
                 logger.error("[TTS] API error: status=%d, body=%s", response.status_code, error_msg)
-                raise TTSManagerError(response.status_code, error_msg)
+                raise BusinessError(BusinessErrorCode.TTS_FAILED)
 
             # The API returns audio data directly or wrapped in JSON
             content_type = response.headers.get("content-type", "")
@@ -90,22 +83,19 @@ class TTSManager:
                         logger.info("[TTS] downloading audio from URL: %s", audio_url[:120])
                         dl_resp = await client.get(audio_url)
                         if dl_resp.status_code != 200:
-                            raise TTSManagerError(
-                                dl_resp.status_code,
-                                f"Audio download failed: {dl_resp.text[:200]}",
-                            )
+                            raise BusinessError(BusinessErrorCode.TTS_FAILED)
                         audio_bytes = dl_resp.content
                         if not audio_bytes:
-                            raise TTSManagerError(200, "Audio download returned empty content")
+                            raise BusinessError(BusinessErrorCode.TTS_FAILED)
                     else:
                         audio_b64 = audio_info.get("data", "")
                         if not audio_b64:
-                            raise TTSManagerError(200, "No audio data in response")
+                            raise BusinessError(BusinessErrorCode.TTS_FAILED)
                         audio_bytes = base64.b64decode(audio_b64)
                 else:
                     # Streaming or other format: treat as base64 string
                     if not audio_info:
-                        raise TTSManagerError(200, "No audio data in response")
+                        raise BusinessError(BusinessErrorCode.TTS_FAILED)
                     audio_bytes = base64.b64decode(audio_info)
 
         logger.info("[TTS] synthesized: %d bytes", len(audio_bytes))

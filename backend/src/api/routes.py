@@ -12,29 +12,11 @@ from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from src.api.deps import db, doc_service, file_store, skill_manager, style_extract_manager, vector_store
+from src.api.deps import db, doc_service, file_store, style_extract_manager
 from src.exceptions import (
-    BizException,
+    BusinessError,
+    BusinessErrorCode,
     success_response,
-    ERR_WORKSPACE_QUOTA,
-    ERR_WORKSPACE_NAME_EXISTS,
-    ERR_WORKSPACE_NOT_FOUND,
-    ERR_DOCUMENT_QUOTA,
-    ERR_DOCUMENT_DUPLICATE_NAME,
-    ERR_DOCUMENT_DUPLICATE_HASH,
-    ERR_TASK_NOT_FOUND,
-    ERR_TASK_FILE_NOT_FOUND,
-    ERR_STYLE_EXTRACTION_QUOTA,
-    ERR_STYLE_EXTRACTION_FORMAT,
-    ERR_TASK_NOT_COMPLETED,
-    ERR_STYLE_ALREADY_SAVED,
-    ERR_CUSTOM_STYLE_QUOTA,
-    ERR_STYLE_NOT_FOUND,
-    ERR_SYSTEM_STYLE_DELETE,
-    ERR_FILE_NOT_FOUND,
-    ERR_TASK_NO_FILE,
-    ERR_MESSAGE_NOT_FOUND,
-    ERR_INVITE_INVALID,
 )
 from src.invite_registry import InviteRegistry
 from src.limits import (
@@ -51,8 +33,8 @@ from src.log_context import (
     reset_log_context,
     set_log_context,
 )
-from src.managers.doc_manager import DuplicateDocumentError
 from src.storage.seeds import _BUILTIN_VOICES
+from src.storage.workspace_paths import delete_style_extract_dir
 from src.url_utils import (
     build_share_audio_url,
     build_share_ppt_url,
@@ -121,11 +103,11 @@ async def log_context_middleware(request: Request, call_next):
     return response
 
 
-@app.exception_handler(BizException)
-async def biz_exception_handler(request: Request, exc: BizException):
+@app.exception_handler(BusinessError)
+async def business_error_handler(request: Request, exc: BusinessError):
     return JSONResponse(
         status_code=200,
-        content={"data": None, "code": exc.code, "message": exc.message},
+        content={"data": None, "code": exc.code, "message": exc.message, "error": exc.to_dict()},
     )
 
 
@@ -147,19 +129,19 @@ class ClaimInviteRequest(BaseModel):
 async def claim_invite(req: ClaimInviteRequest):
     record = invite_registry.claim(req.code)
     if not record:
-        raise BizException(ERR_INVITE_INVALID, "邀请码无效或已停用")
+        raise BusinessError(BusinessErrorCode.INVITE_INVALID)
     return success_response({"user_id": record.user_id, "nickname": record.nickname})
 
 
 def _ensure_invited_user(user_id: str):
     if not invite_registry.is_valid_user_id(user_id):
-        raise BizException(ERR_INVITE_INVALID, "邀请码无效或已停用")
+        raise BusinessError(BusinessErrorCode.INVITE_INVALID)
 
 
 async def _get_invited_workspace(workspace_id: str) -> dict:
     workspace = await db.get_workspace(workspace_id)
     if not workspace:
-        raise BizException(ERR_WORKSPACE_NOT_FOUND, "工作区不存在")
+        raise BusinessError(BusinessErrorCode.WORKSPACE_NOT_FOUND)
     _ensure_invited_user(workspace["user_id"])
     set_log_context(user_id=workspace["user_id"], workspace_id=workspace_id)
     return workspace
@@ -176,11 +158,11 @@ async def create_workspace(req: CreateWorkspaceRequest):
     _ensure_invited_user(req.user_id)
     count = await db.count_workspaces(req.user_id)
     if count >= MAX_WORKSPACES_PER_USER:
-        raise BizException(ERR_WORKSPACE_QUOTA, f"每个用户最多创建 {MAX_WORKSPACES_PER_USER} 个工作区，当前已有 {count} 个。")
+        raise BusinessError(BusinessErrorCode.WORKSPACE_QUOTA)
     try:
         result = await db.create_workspace(user_id=req.user_id, name=req.name)
     except ValueError as exc:
-        raise BizException(ERR_WORKSPACE_NAME_EXISTS, "工作区名称已存在") from exc
+        raise BusinessError(BusinessErrorCode.WORKSPACE_NAME_EXISTS) from exc
     logger.info("[API] workspace created: id=%s", result["id"])
     return success_response(result)
 
@@ -225,11 +207,36 @@ def _parse_json_object(raw: str | dict | None) -> dict:
     return data if isinstance(data, dict) else {}
 
 
+def _safe_error(raw: object, fallback: BusinessErrorCode) -> dict:
+    if isinstance(raw, dict):
+        code = raw.get("code")
+        message = raw.get("message")
+        if isinstance(code, int) and isinstance(message, str):
+            return {
+                key: raw[key]
+                for key in ("code", "message", "type", "retryable", "stage")
+                if key in raw
+            }
+    if isinstance(raw, str):
+        lowered = raw.lower()
+        if fallback.name.startswith("STYLE_EXTRACTION"):
+            if "insufficient" in lowered or "quota" in lowered or "billing" in lowered or "402" in lowered:
+                return BusinessError(BusinessErrorCode.STYLE_EXTRACTION_MODEL_QUOTA).to_dict()
+            if "authentication" in lowered or "api key" in lowered or "401" in lowered:
+                return BusinessError(BusinessErrorCode.STYLE_EXTRACTION_MODEL_AUTH).to_dict()
+    return BusinessError(fallback).to_dict()
+
+
 def _sanitize_document(doc: dict) -> dict:
     data = dict(doc)
     data.pop("storage_path", None)
     data.pop("content_hash", None)
     data["progress"] = _parse_json_object(data.pop("progress_data", None))
+    if data.get("status") == "error":
+        error = _safe_error(data.get("error_message"), BusinessErrorCode.DOCUMENT_PARSE_FAILED)
+        data["error_message"] = error["message"]
+        if data["progress"]:
+            data["progress"]["message"] = error["message"]
     return data
 
 
@@ -246,7 +253,10 @@ def _sanitize_result_data(task_type: str, raw: str | dict | None) -> dict:
             "outline",
             "error",
         }
-        return {key: data[key] for key in allowed if key in data}
+        safe = {key: data[key] for key in allowed if key in data}
+        if "error" in safe:
+            safe["error"] = _safe_error(safe["error"], BusinessErrorCode.OUTPUT_SAVE_FAILED)
+        return safe
 
     if task_type == "narration":
         safe_slides = []
@@ -266,6 +276,8 @@ def _sanitize_result_data(task_type: str, raw: str | dict | None) -> dict:
             if key in data
         }
         safe["slides"] = safe_slides
+        if "tts_error" in safe:
+            safe["tts_error"] = _safe_error(safe["tts_error"], BusinessErrorCode.TTS_FAILED)
         return safe
 
     if task_type == "ppt_style_extraction":
@@ -280,6 +292,10 @@ def _sanitize_result_data(task_type: str, raw: str | dict | None) -> dict:
             "error",
         }
         safe = {key: data[key] for key in allowed if key in data}
+        if "error" in safe:
+            safe["error"] = _safe_error(
+                safe["error"], BusinessErrorCode.STYLE_EXTRACTION_UNKNOWN
+            )
         if data.get("preview_html_path"):
             safe["has_preview"] = True
         return safe
@@ -334,7 +350,7 @@ async def update_workspace_config(workspace_id: str, req: UpdateConfigRequest):
     try:
         ext_data = await db.update_workspace_ext_data(workspace_id, req.key, req.value)
     except ValueError as exc:
-        raise BizException(ERR_WORKSPACE_NOT_FOUND, "工作区不存在") from exc
+        raise BusinessError(BusinessErrorCode.WORKSPACE_NOT_FOUND) from exc
     return success_response(ext_data)
 
 
@@ -379,7 +395,7 @@ async def get_message_detail(thread_id: str, message_id: str):
     )
     msg = await db.get_message_by_id(message_id, thread_id)
     if not msg:
-        raise BizException(ERR_MESSAGE_NOT_FOUND, "消息不存在")
+        raise BusinessError(BusinessErrorCode.MESSAGE_NOT_FOUND)
     return success_response(msg)
 
 
@@ -405,20 +421,14 @@ async def upload_document(
     await _get_invited_workspace(workspace_id)
     doc_count = await db.count_documents(workspace_id)
     if doc_count >= MAX_DOCUMENTS_PER_WORKSPACE:
-        raise BizException(ERR_DOCUMENT_QUOTA, f"每个工作区最多上传 {MAX_DOCUMENTS_PER_WORKSPACE} 个文档，当前已有 {doc_count} 个。")
+        raise BusinessError(BusinessErrorCode.DOCUMENT_QUOTA)
     content = await file.read()
     logger.info("[API] file read: %d bytes", len(content))
-    try:
-        doc = await doc_service.create_document_upload(
-            workspace_id=workspace_id,
-            filename=file.filename,
-            content=content,
-        )
-    except DuplicateDocumentError as exc:
-        logger.info("[API] duplicate document rejected: %s", exc)
-        if exc.existing_doc_id and "内容完全相同" in str(exc):
-            raise BizException(ERR_DOCUMENT_DUPLICATE_HASH, str(exc)) from exc
-        raise BizException(ERR_DOCUMENT_DUPLICATE_NAME, str(exc)) from exc
+    doc = await doc_service.create_document_upload(
+        workspace_id=workspace_id,
+        filename=file.filename,
+        content=content,
+    )
     add_context_task(background_tasks, doc_service.process_document, doc["id"])
     logger.info("[API] upload result: id=%s status=%s", doc["id"], doc["status"])
     return success_response(_sanitize_document(doc))
@@ -458,7 +468,7 @@ async def delete_task(workspace_id: str, task_id: str):
 
     task = await db.get_task(task_id)
     if not task:
-        raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
+        raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
 
     deleted_ids = await db.delete_task(task_id)
     revoked_count = await db.revoke_shares_for_tasks(deleted_ids, reason="task_deleted")
@@ -484,6 +494,7 @@ async def delete_task(workspace_id: str, task_id: str):
         logger.info("[API] cleaned narration files for task: %s", task_id)
     elif task["type"] == "ppt_style_extraction":
         await file_store.delete_style_task_dir(workspace_id, task_id)
+        delete_style_extract_dir(workspace_id, task_id)
         logger.info("[API] removed style extraction output directory for task: %s", task_id)
 
     return success_response({"deleted_ids": deleted_ids, "revoked_shares": revoked_count})
@@ -496,7 +507,7 @@ async def save_task_file(workspace_id: str, task_id: str, req: SaveTaskFileReque
     await _get_invited_workspace(workspace_id)
     task = await db.get_task(task_id)
     if not task:
-        raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
+        raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
     result_data = {}
     if task.get("result_data"):
         try:
@@ -505,9 +516,9 @@ async def save_task_file(workspace_id: str, task_id: str, req: SaveTaskFileReque
             pass
     file_path = result_data.get("file_path", "")
     if not file_path:
-        raise BizException(ERR_TASK_FILE_NOT_FOUND, "任务文件不存在")
+        raise BusinessError(BusinessErrorCode.TASK_FILE_NOT_FOUND)
     if not await file_store.exists(file_path):
-        raise BizException(ERR_TASK_FILE_NOT_FOUND, "任务文件不存在")
+        raise BusinessError(BusinessErrorCode.TASK_FILE_NOT_FOUND)
     await file_store.write_text(file_path, req.content)
     logger.info("[API] saved task file: %s (%d bytes)", file_path, len(req.content))
     return success_response(None)
@@ -598,10 +609,10 @@ async def submit_style_extraction(
     logger.info("[API] POST /api/workspaces/%s/style-extraction filename=%s", workspace_id, file.filename)
     await _get_invited_workspace(workspace_id)
     if not file.filename or not file.filename.lower().endswith(".pptx"):
-        raise BizException(ERR_STYLE_EXTRACTION_FORMAT, "仅支持 .pptx 文件")
+        raise BusinessError(BusinessErrorCode.STYLE_EXTRACTION_FORMAT)
     style_task_count = await db.count_tasks_by_type(workspace_id, "ppt_style_extraction")
     if style_task_count >= MAX_STYLE_EXTRACTION_TASKS_PER_WORKSPACE:
-        raise BizException(ERR_STYLE_EXTRACTION_QUOTA, f"每个工作区最多创建 {MAX_STYLE_EXTRACTION_TASKS_PER_WORKSPACE} 个风格提取任务，当前已有 {style_task_count} 个。")
+        raise BusinessError(BusinessErrorCode.STYLE_EXTRACTION_QUOTA)
 
     content = await file.read()
 
@@ -627,7 +638,7 @@ async def get_task(workspace_id: str, task_id: str):
     await _get_invited_workspace(workspace_id)
     task = await db.get_task(task_id)
     if not task:
-        raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
+        raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
     return success_response(_sanitize_task(task))
 
 
@@ -641,11 +652,12 @@ async def delete_style_extraction(workspace_id: str, task_id: str):
 
     task = await db.get_task(task_id)
     if not task:
-        raise BizException(ERR_TASK_NOT_FOUND, "任务不存在")
+        raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
 
     deleted_ids = await db.delete_task(task_id)
 
     await file_store.delete_style_task_dir(workspace_id, task_id)
+    delete_style_extract_dir(workspace_id, task_id)
     logger.info("[API] removed style extraction output directory for task: %s", task_id)
 
     return success_response({"deleted_ids": deleted_ids})
@@ -661,16 +673,8 @@ async def save_style_from_extraction(task_id: str, req: SaveStyleRequest):
     logger.info("[API] POST /api/style-extraction/%s/save user_id=%s", task_id, req.user_id)
     style_count = await db.count_custom_styles(req.user_id)
     if style_count >= MAX_CUSTOM_STYLES_PER_USER:
-        raise BizException(ERR_CUSTOM_STYLE_QUOTA, f"每个用户最多保存 {MAX_CUSTOM_STYLES_PER_USER} 个自定义风格，当前已有 {style_count} 个。")
-    try:
-        style = await style_extract_manager.save_as_custom_style(task_id, req.user_id)
-    except ValueError as exc:
-        msg = str(exc)
-        if "未完成" in msg or "not completed" in msg.lower():
-            raise BizException(ERR_TASK_NOT_COMPLETED, "任务未完成，无法保存") from exc
-        if "已保存" in msg or "重复" in msg:
-            raise BizException(ERR_STYLE_ALREADY_SAVED, "该风格已保存，请勿重复操作") from exc
-        raise BizException(ERR_TASK_NOT_FOUND, msg) from exc
+        raise BusinessError(BusinessErrorCode.CUSTOM_STYLE_QUOTA)
+    style = await style_extract_manager.save_as_custom_style(task_id, req.user_id)
     return success_response(style)
 
 
@@ -701,9 +705,9 @@ async def delete_ppt_style(style_id: str):
     logger.info("[API] DELETE /api/ppt-styles/%s", style_id)
     style = await db.get_ppt_style(style_id)
     if not style:
-        raise BizException(ERR_STYLE_NOT_FOUND, "风格不存在")
+        raise BusinessError(BusinessErrorCode.STYLE_NOT_FOUND)
     if style["user_id"] == "system":
-        raise BizException(ERR_SYSTEM_STYLE_DELETE, "不能删除系统风格")
+        raise BusinessError(BusinessErrorCode.SYSTEM_STYLE_DELETE)
     # Delete preview file and its directory if it exists
     preview_path = style.get("preview_path", "")
     if preview_path:

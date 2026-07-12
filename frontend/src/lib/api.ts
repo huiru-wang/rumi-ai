@@ -13,16 +13,44 @@ interface ApiResponse<T = unknown> {
   data: T;
   code: number;
   message: string;
+  error?: BusinessErrorPayload;
+}
+
+export interface BusinessErrorPayload {
+  code: number;
+  message: string;
+  type: string;
+  retryable: boolean;
+  stage?: string;
 }
 
 export class ApiError extends Error {
   code: number;
+  error: BusinessErrorPayload;
 
-  constructor(code: number, message: string) {
+  constructor(code: number, message: string, error?: BusinessErrorPayload) {
     super(message || `API error: code ${code}`);
     this.name = "ApiError";
     this.code = code;
+    this.error = error ?? {
+      code,
+      message: message || "服务暂时不可用，请稍后重试。",
+      type: "legacy_api_error",
+      retryable: false,
+    };
   }
+}
+
+export function getBusinessErrorMessage(
+  error: unknown,
+  fallback = "服务暂时不可用，请稍后重试。",
+): string {
+  if (typeof error === "string") return error || fallback;
+  if (error && typeof error === "object" && "message" in error) {
+    const message = (error as { message?: unknown }).message;
+    if (typeof message === "string" && message) return message;
+  }
+  return fallback;
 }
 
 async function request<T>(
@@ -54,7 +82,7 @@ async function request<T>(
   }
   if (body.code !== 0) {
     console.error(`[API] ${method} ${path} biz error: code=${body.code} message=${body.message}`);
-    throw new ApiError(body.code, body.message);
+    throw new ApiError(body.code, body.message, body.error);
   }
   console.log(`[API] ${method} ${path} →`, Array.isArray(body.data) ? `${body.data.length} items` : body.data);
   return body.data;

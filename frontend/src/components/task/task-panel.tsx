@@ -28,6 +28,7 @@ import {
   deleteTaskShare,
   downloadTaskFile,
   getTaskShare,
+  getBusinessErrorMessage,
   listTasks,
   type PptStyleInfo,
   type Task,
@@ -318,6 +319,14 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
     onNarrate?.(task.id, task.title || "PPT");
   };
 
+  const handleRowClick = () => {
+    if (canViewStyleExtraction) {
+      onViewStyleExtraction!(task);
+    } else if (canExpand) {
+      onToggleExpand?.();
+    }
+  };
+
   const handleDelete = async () => {
     setConfirmDelete(false);
     try {
@@ -342,8 +351,16 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
   return (
     <>
       <div
-        className={`group flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/50 ${canExpand ? "cursor-pointer" : ""}`}
-        onClick={canExpand ? onToggleExpand : undefined}
+        className={`group flex items-start gap-2.5 rounded-lg px-2.5 py-2 transition-colors hover:bg-muted/50 ${canExpand || canViewStyleExtraction ? "cursor-pointer" : ""}`}
+        onClick={canExpand || canViewStyleExtraction ? handleRowClick : undefined}
+        onKeyDown={canViewStyleExtraction ? (event) => {
+          if (event.key === "Enter" || event.key === " ") {
+            event.preventDefault();
+            handleRowClick();
+          }
+        } : undefined}
+        role={canViewStyleExtraction ? "button" : undefined}
+        tabIndex={canViewStyleExtraction ? 0 : undefined}
       >
         {/* Left icon: always show type icon, chevron below for expandable */}
         <div className="mt-1 flex flex-shrink-0 flex-col items-center gap-0.5">
@@ -374,7 +391,7 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
           </p>
           {task.status === "tts_failed" && resultData?.tts_error && (
             <p className="mt-0.5 text-[10px] text-orange-400">
-              {resultData.tts_error}
+              {getBusinessErrorMessage(resultData.tts_error, "语音合成失败，请稍后重试。")}
             </p>
           )}
         </div>
@@ -402,7 +419,7 @@ function TaskItem({ task, workspaceId, styles, voices, onDeleted, onNarrate, onP
         {canViewStyleExtraction && (
           <button
             onClick={(e) => { e.stopPropagation(); onViewStyleExtraction!(task); }}
-            className="mt-0.5 flex-shrink-0 rounded p-1 text-accent/70 opacity-0 transition-all hover:text-accent group-hover:opacity-100"
+            className="mt-0.5 flex-shrink-0 rounded p-1 text-accent/70 transition-all hover:text-accent md:opacity-0 md:group-hover:opacity-100"
             title="查看风格提取"
           >
             <Eye size={13} />

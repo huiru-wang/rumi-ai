@@ -6,6 +6,7 @@ import traceback
 from langchain.tools import tool, ToolRuntime
 
 from src.agent.state import MainAgentState
+from src.exceptions import BusinessError, BusinessErrorCode
 from src.limits import MAX_NARRATIONS_PER_PPT_TASK
 from src.log_context import create_context_task
 from src.managers.tts_manager import TTSManager
@@ -86,8 +87,12 @@ async def _tts_pipeline(
             num, type(exc).__name__, exc, tb,
         )
         try:
+            error = exc if isinstance(exc, BusinessError) else BusinessError(
+                BusinessErrorCode.TTS_FAILED,
+                stage=f"slide:{num}",
+            )
             current = await db.get_task_result_data(task_id)
-            current["tts_error"] = f"Slide {num} TTS failed: {type(exc).__name__}: {exc}"
+            current["tts_error"] = error.to_dict()
             await db.update_task(
                 task_id,
                 status="tts_failed",
@@ -142,26 +147,23 @@ def create_save_narration_tool(db: Database, file_store: FileStore, tts_service:
         # Validate parent task
         parent_task = await db.get_task(parent_task_id)
         if not parent_task:
-            return f"错误：未找到 PPT 任务 {parent_task_id}。"
+            raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
         if parent_task.get("type") != "ppt":
-            return f"错误：任务 {parent_task_id} 不是 PPT 类型。"
+            raise BusinessError(BusinessErrorCode.TASK_NOT_FOUND)
 
         # Quota check: max narrations per PPT task
         narration_count = await db.count_child_tasks(parent_task_id, "narration")
         if narration_count >= MAX_NARRATIONS_PER_PPT_TASK:
-            return (
-                f"错误：每个PPT任务最多生成 {MAX_NARRATIONS_PER_PPT_TASK} 个口播稿，"
-                f"当前已有 {narration_count} 个。请删除旧口播稿后重试。"
-            )
+            raise BusinessError(BusinessErrorCode.NARRATION_QUOTA)
 
         # Parse slides JSON
         try:
             slides_list = json.loads(slides) if isinstance(slides, str) else slides
         except (json.JSONDecodeError, TypeError):
-            return "错误：slides 参数不是有效的 JSON 格式。"
+            raise BusinessError(BusinessErrorCode.NARRATION_GENERATION_FAILED)
 
         if not slides_list:
-            return "错误：slides 列表为空。"
+            raise BusinessError(BusinessErrorCode.NARRATION_GENERATION_FAILED)
 
         # Build narration markdown text
         md_lines = [f"# {title}\n"]

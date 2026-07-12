@@ -263,8 +263,7 @@ Output the outline as Markdown in this structure:
 
 ### 请确认
 
-如果这个大纲方向没问题，请回复“确认”。
-如果需要调整，请直接说明希望修改的部分，例如：增加/删除章节、调整页数、更换顺序、加强案例、加强代码、加强图解或总结。
+下方会出现一个确认表单。选择“确认”继续生成，或直接在输入框中填写希望修改的部分后提交。
 ```
 
 #### Keywords 生成规则（重要）
@@ -323,11 +322,28 @@ Never write vague suggestions like "配图" or "可视化".
 
 ### Step 3.3: Multi-turn Revision Loop
 
-After presenting the outline, wait for the user's reply.
+After presenting the outline, immediately call `clarify_form` for outline confirmation. Do not ask the user to reply in free text.
+
+Use exactly one `clarify_form` call with:
+
+- `title`: `PPT 大纲确认`
+- `description`: `请选择“确认”继续生成 PPT，或直接输入修改意见后提交。`
+- `fields`:
+  - `name`: `outline_confirmation`
+  - `label`: `是否确认当前大纲？`
+  - `type`: `select`
+  - `options`: `["确认"]`
+  - `recommended`: `["确认"]`
+  - `allow_custom`: `true`
+  - `required`: `true`
+
+When the user wants changes, they should type the requested changes directly in the custom input. Typing custom text replaces the selected confirmation value. Treat any non-empty returned value other than an explicit confirmation as revision instructions.
+
+If `clarify_form` returns `cancelled: true`, immediately stop the entire PPT generation flow. Do not proceed to Phase 4 or call `save_ppt`.
 
 - If the user explicitly confirms, proceed to Phase 4.
-- If the user asks for changes, revise the outline and ask for confirmation again.
-- If the user reply is ambiguous, ask one short confirmation question before proceeding.
+- If the user asks for changes through the form, revise the outline and show the revised outline, then call the exact same confirmation form again. Every confirmation round must use `options: ["确认"]` and `allow_custom: true`; never fall back to a two-button form.
+- If the form result is ambiguous, ask one short confirmation question before proceeding.
 - If the requested change conflicts with selected documents or available evidence, explain the tradeoff and propose a revised outline for confirmation.
 
 Explicit confirmations include: "确认", "可以", "没问题", "按这个来", "开始生成", "Looks good", "Approved", or equivalent clear approval.

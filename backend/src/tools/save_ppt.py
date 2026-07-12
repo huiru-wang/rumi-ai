@@ -5,6 +5,7 @@ import re
 from langchain.tools import tool, ToolRuntime
 
 from src.agent.state import MainAgentState
+from src.exceptions import BusinessError, BusinessErrorCode
 from src.limits import MAX_PPT_TASKS_PER_WORKSPACE
 from src.storage.database import Database
 from src.storage.file_store import FileStore
@@ -47,10 +48,7 @@ async def save_ppt_artifact(
     # Quota check: max PPT tasks per workspace
     ppt_count = await db.count_tasks_by_type(workspace_id, "ppt")
     if ppt_count >= MAX_PPT_TASKS_PER_WORKSPACE:
-        return (
-            {},
-            f"保存失败：每个工作区最多生成 {MAX_PPT_TASKS_PER_WORKSPACE} 个PPT任务，当前已有 {ppt_count} 个。请删除旧任务后重试。",
-        )
+        raise BusinessError(BusinessErrorCode.PPT_TASK_QUOTA)
 
     # Always derive filename from title (Chinese) to ensure readable download names.
     # The LLM may pass an English filename — ignore it in favor of the user-visible title.
@@ -111,13 +109,16 @@ async def save_ppt_artifact(
         return task, f"产出已保存: {title}。用户可在右侧产出面板查看和下载。"
 
     except Exception as exc:
+        error = exc if isinstance(exc, BusinessError) else BusinessError(
+            BusinessErrorCode.OUTPUT_SAVE_FAILED
+        )
         await db.update_task(
             task["id"],
             status="failed",
-            result_data=json.dumps({"error": str(exc), "filename": filename}),
+            result_data=json.dumps({"error": error.to_dict(), "filename": filename}),
         )
         logger.error("[save_ppt] failed: %s", exc, exc_info=True)
-        return task, f"产出保存失败: {exc}"
+        raise error from exc
 
 
 def create_save_ppt_tool(db: Database, file_store: FileStore):
