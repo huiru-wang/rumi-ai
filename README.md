@@ -53,7 +53,10 @@ RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档
 | `MAIN_MODEL` | Agent 主模型 | 默认 `deepseek-v4-flash` |
 | `DATA_DIR` | 项目数据根目录，包含 SQLite、Chroma、本地文件和 workspace 工作目录 | 默认 `./data`，生产建议 `/data/rumi-ai` |
 | `PUBLIC_API_BASE` | 对外可访问的 FastAPI 地址，用于生成 PPT 图片资源代理 URL | 默认 `http://localhost:8000` |
-| `INVITE_CODES_FILE` | 邀请码映射文件路径，热更新生效 | 默认 `./data/invites.json` |
+| `INVITE_CODES_FILE` | 旧邀请码映射文件，仅在 FastAPI 启动时幂等导入 SQLite | 默认 `./data/invites.json` |
+| `ADMIN_USERNAME` | 管理后台登录账号 | 使用管理后台时必须配置 |
+| `ADMIN_PASSWORD` | 管理后台登录密码 | 使用管理后台时必须配置 |
+| `ADMIN_SESSION_SECRET` | 管理后台会话签名密钥，生产环境使用随机长字符串 | 使用管理后台时必须配置 |
 | `EMBEDDING_API_KEY` | 向量 Embedding（Dashscope） | **必须** |
 | `EMBEDDING_API_BASE` | Embedding API 地址 | 默认 Dashscope |
 | `EMBEDDING_MODEL` | Embedding 模型 | 默认 `text-embedding-v2` |
@@ -69,6 +72,8 @@ RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档
 ```bash
 ./scripts/start.sh
 ```
+
+启动后访问 `http://localhost:3000/admin` 进入管理后台。后台提供使用看板、用户使用明细和邀请码管理；新邀请码生成后可立即在首页使用。
 
 启动后访问 **http://localhost:3000** 即可使用。
 

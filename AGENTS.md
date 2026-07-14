@@ -36,7 +36,7 @@ RumiAI 是一个 **文档驱动的 AI 工作台**，帮助用户基于上传的�
 
 后端由 **两个独立进程** 组成，修改时需注意影响范围：
 
-- **FastAPI (:8000)** — REST API，管理工作区/文档/任务/消息/PPT风格 CRUD。依赖从 `src/api/deps.py` 初始化
+- **FastAPI (:8000)** — REST API，管理工作区/文档/任务/消息/PPT风格、邀请码和运营看板。依赖从 `src/api/deps.py` 初始化
 - **LangGraph (:2024)** — Agent 运行时，流式对话+工具调用。依赖从 `src/agent/graph.py._make_default_graph()` 独立初始化
 
 两个进程共享存储（SQLite + ChromaDB HTTP Server + FileStore），但各自有独立的实例。PPTX 风格提取当前由 FastAPI 后台任务执行，不属于 LangGraph 主 Agent graph。
@@ -75,6 +75,7 @@ FastAPI 通过 `deps.py` 的 `AppContext.from_env()` 创建，LangGraph 通过 `
   - Prompt templates: `backend/src/managers/prompts/` (system_prompt.md, style_slide_understanding_prompt.md, style_merge_template_prompt.md, style_preview_html_prompt.md)
   - Parsers: `backend/src/parsers/` (base.py / pdf / docx / markdown / pptx)
   - Frontend API client: `frontend/src/lib/api.ts` (includes task/share/style URL builders; do not use path-based file URLs)
+  - Admin dashboard: `frontend/src/app/admin/page.tsx` (`frontend/src/components/admin/` contains small reusable helpers)
   - Chat system: `frontend/src/components/chat/` (assistant.tsx 管理连接, `thread/` 渲染消息)
   - Config UI: `frontend/src/components/config/` (config-panel.tsx, style-picker-dialog.tsx, style-extraction-dialog.tsx, voice-picker-dialog.tsx)
   - PPT player/preview: `frontend/src/components/player/` (ppt-player-dialog.tsx, ppt-preview-dialog.tsx)
@@ -110,13 +111,14 @@ pnpm build && pnpm start                                    # 生产构建
 
 - Add or change FastAPI endpoints in `backend/src/api/routes.py`.
 - Add new dependencies to `backend/src/api/deps.py` (FastAPI process) or `backend/src/agent/graph.py` (LangGraph process).
-- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`, `share_link`.
+- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`, `share_link`, `invite_code`.
   - `workspace` has `ext_data` JSON column for config (`ppt_style` stores style ID like `sys-swiss-modern`, `voice_info` stores `{id, name, trait, gender}`).
   - `document` has `content_hash` column for duplicate detection.
   - `task` has `parent_task_id` for parent-child hierarchy (e.g., narration tasks under PPT tasks). Task types: `ppt`, `narration`, `ppt_style_extraction`.
   - `message` stores turn-based and run-grouped chat history for pagination and recovery.
   - `ppt_style` stores system builtin + user custom PPT styles (id, category, name, name_en, description, style_description, resource_manifest, preview_path). System style IDs are prefixed with `sys-`.
   - `share_link` stores active/revoked share tokens for completed PPT and narration tasks.
+  - `invite_code` stores generated/imported invite codes, user identity, activation time, enabled state, and claim counts. `INVITE_CODES_FILE` is legacy startup import only; SQLite is the runtime source of truth.
 - Keep vector behavior in `backend/src/storage/vector_store.py`. ChromaDB via **HTTP server** (`HttpClient`), both processes share the same server. Collections are per-workspace: `ws_{workspace_id}`. Config: `CHROMA_HOST`, `CHROMA_PORT` env vars.
 - Keep file operations in `backend/src/storage/file_store.py`. FileStore delegates to `StorageProvider` (LocalProvider or OSSProvider). New path structure: `user/{user_id}/workspace/{workspace_id}/docs|ppt|style/...`. Smart routing handles legacy absolute paths transparently.
 - Keep storage provider abstraction in `backend/src/storage/providers.py`. `StorageProvider` ABC with `LocalProvider` (filesystem) and `OSSProvider` (Alibaba Cloud OSS). Toggle via `OSS_ENABLE` env var.
@@ -151,6 +153,7 @@ pnpm build && pnpm start                                    # 生产构建
 - PPT preview/edit lives in `frontend/src/components/player/ppt-preview-dialog.tsx` (iframe srcDoc, edit mode via contentEditable).
 - PPT playback lives in `frontend/src/components/player/ppt-player-dialog.tsx` (slide-by-slide audio sync, fullscreen).
 - Public share playback lives in `frontend/src/app/share/[token]/page.tsx`. It consumes safe share URLs from `getShareDetail()` and never storage paths.
+- Admin UI lives in `frontend/src/app/admin/page.tsx`; keep it mobile-first, protect all admin APIs with the short-lived admin bearer session, and never expose chat/document contents in analytics responses.
 - Keep document, chat, task, and layout UI in their existing component folders.
 - Follow the local Tailwind and component style already in the app (dark theme, CSS variables).
 - No global state library — each panel manages its own state via `useState` + polling.

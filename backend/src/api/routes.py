@@ -2,16 +2,28 @@ import json
 import logging
 import re
 import time
+from datetime import datetime
 from mimetypes import guess_type
 from pathlib import Path, PurePosixPath
 from urllib.parse import quote
 
-from fastapi import BackgroundTasks, FastAPI, File, HTTPException, Query, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    Depends,
+    FastAPI,
+    File,
+    Header,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import FileResponse, JSONResponse, Response
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
+from src.admin_auth import AdminAuth, AdminAuthError
 from src.api.deps import db, doc_service, file_store, style_extract_manager
 from src.exceptions import (
     BusinessError,
@@ -43,7 +55,7 @@ from src.url_utils import (
 )
 
 logger = logging.getLogger(__name__)
-invite_registry = InviteRegistry.from_env()
+admin_auth = AdminAuth.from_env()
 
 # Configure root logger for development
 configure_log_record_context()
@@ -115,7 +127,105 @@ async def business_error_handler(request: Request, exc: BusinessError):
 async def startup():
     logger.info("[API] starting up, initializing database...")
     await db.initialize()
+    try:
+        legacy_records = InviteRegistry.from_env().read_records()
+        await db.import_invites([record.__dict__ for record in legacy_records])
+        logger.info("[API] imported %d legacy invite records", len(legacy_records))
+    except Exception:
+        logger.exception("[API] legacy invite import failed; keeping database records")
     logger.info("[API] database initialized")
+
+
+# --- Admin ---
+
+
+class AdminLoginRequest(BaseModel):
+    username: str
+    password: str
+
+
+class AdminInviteCreateRequest(BaseModel):
+    nickname: str
+    expires_at: datetime | None = None
+
+
+class AdminInviteUpdateRequest(BaseModel):
+    enabled: bool
+
+
+def require_admin(authorization: str = Header(default="")) -> str:
+    scheme, _, token = authorization.partition(" ")
+    if scheme.lower() != "bearer" or not token:
+        raise HTTPException(status_code=401, detail="请先登录管理后台")
+    try:
+        return admin_auth.verify(token)
+    except AdminAuthError as exc:
+        raise HTTPException(status_code=401, detail="管理员登录已失效") from exc
+
+
+@app.post("/api/admin/session")
+async def create_admin_session(req: AdminLoginRequest):
+    try:
+        token = admin_auth.login(req.username, req.password)
+    except AdminAuthError as exc:
+        raise HTTPException(status_code=401, detail="管理员账号或密码错误") from exc
+    return success_response({"token": token, "username": req.username})
+
+
+@app.get("/api/admin/dashboard")
+async def get_admin_dashboard(
+    days: int = Query(default=7),
+    _admin: str = Depends(require_admin),
+):
+    return success_response(await db.get_admin_dashboard(days=days))
+
+
+@app.get("/api/admin/users")
+async def list_admin_users(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    keyword: str = Query(default=""),
+    _admin: str = Depends(require_admin),
+):
+    return success_response(
+        await db.list_admin_users(page=page, page_size=page_size, keyword=keyword)
+    )
+
+
+@app.get("/api/admin/invites")
+async def list_admin_invites(
+    page: int = Query(default=1, ge=1),
+    page_size: int = Query(default=20, ge=1, le=100),
+    _admin: str = Depends(require_admin),
+):
+    return success_response(await db.list_invites(page=page, page_size=page_size))
+
+
+@app.post("/api/admin/invites")
+async def create_admin_invite(
+    req: AdminInviteCreateRequest,
+    _admin: str = Depends(require_admin),
+):
+    try:
+        invite = await db.create_invite(
+            req.nickname,
+            expires_at=req.expires_at.isoformat() if req.expires_at else None,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail="请输入用户昵称") from exc
+    return success_response(invite)
+
+
+@app.patch("/api/admin/invites/{invite_id}")
+async def update_admin_invite(
+    invite_id: str,
+    req: AdminInviteUpdateRequest,
+    _admin: str = Depends(require_admin),
+):
+    invite = await db.set_invite_enabled(invite_id, req.enabled)
+    if not invite:
+        raise HTTPException(status_code=404, detail="邀请码不存在")
+    return success_response(invite)
 
 
 # --- Workspace ---
@@ -127,14 +237,14 @@ class ClaimInviteRequest(BaseModel):
 
 @app.post("/api/invites/claim")
 async def claim_invite(req: ClaimInviteRequest):
-    record = invite_registry.claim(req.code)
+    record = await db.claim_invite(req.code)
     if not record:
         raise BusinessError(BusinessErrorCode.INVITE_INVALID)
-    return success_response({"user_id": record.user_id, "nickname": record.nickname})
+    return success_response({"user_id": record["user_id"], "nickname": record["nickname"]})
 
 
-def _ensure_invited_user(user_id: str):
-    if not invite_registry.is_valid_user_id(user_id):
+async def _ensure_invited_user(user_id: str):
+    if not await db.is_valid_invited_user(user_id):
         raise BusinessError(BusinessErrorCode.INVITE_INVALID)
 
 
@@ -142,7 +252,7 @@ async def _get_invited_workspace(workspace_id: str) -> dict:
     workspace = await db.get_workspace(workspace_id)
     if not workspace:
         raise BusinessError(BusinessErrorCode.WORKSPACE_NOT_FOUND)
-    _ensure_invited_user(workspace["user_id"])
+    await _ensure_invited_user(workspace["user_id"])
     set_log_context(user_id=workspace["user_id"], workspace_id=workspace_id)
     return workspace
 
@@ -155,7 +265,7 @@ class CreateWorkspaceRequest(BaseModel):
 @app.post("/api/workspaces")
 async def create_workspace(req: CreateWorkspaceRequest):
     logger.info("[API] POST /api/workspaces user_id=%s name=%s", req.user_id, req.name)
-    _ensure_invited_user(req.user_id)
+    await _ensure_invited_user(req.user_id)
     count = await db.count_workspaces(req.user_id)
     if count >= MAX_WORKSPACES_PER_USER:
         raise BusinessError(BusinessErrorCode.WORKSPACE_QUOTA)
@@ -170,7 +280,7 @@ async def create_workspace(req: CreateWorkspaceRequest):
 @app.get("/api/workspaces")
 async def list_workspaces(user_id: str):
     logger.info("[API] GET /api/workspaces user_id=%s", user_id)
-    _ensure_invited_user(user_id)
+    await _ensure_invited_user(user_id)
     data = await db.list_workspaces(user_id=user_id)
     return success_response(data)
 

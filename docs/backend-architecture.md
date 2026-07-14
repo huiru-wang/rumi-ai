@@ -74,6 +74,8 @@ class AppContext:
 | `VISION_API_KEY` / `VISION_MODEL` | 文档图片理解和 PPTX 背景图分析 |
 | `OSS_ENABLE` 和 OSS 相关变量 | 切换 LocalProvider / OSSProvider |
 | `PUBLIC_API_BASE` | 生成可公开访问的代理 URL，用于风格资源和分享资源 |
+| `INVITE_CODES_FILE` | 旧邀请码 JSON，FastAPI 启动时幂等导入 SQLite |
+| `ADMIN_USERNAME` / `ADMIN_PASSWORD` / `ADMIN_SESSION_SECRET` | 管理后台账号密码和会话签名密钥 |
 
 ## 4. 数据模型
 
@@ -87,6 +89,7 @@ SQLite 由 `backend/src/storage/database.py` 管理，启动时自动建表并�
 | `message` | `thread_id`, `workspace_id`, `run_id`, `message_id`, `role`, `content`, `tool_calls` | Agent 消息历史，支持按 turn/run 分页 |
 | `ppt_style` | `user_id`, `category`, `name`, `name_en`, `description`, `style_description`, `resource_manifest`, `preview_path` | 系统风格和用户自定义风格 |
 | `share_link` | `token`, `task_id`, `workspace_id`, `type`, `revoked_at` | PPT/口播稿公开分享链接 |
+| `invite_code` | `code`, `user_id`, `nickname`, `enabled`, `claimed_at`, `last_claimed_at`, `claim_count` | 邀请码、激活记录和用户入口状态 |
 
 系统 PPT 风格来自 `backend/src/storage/seed_data/ppt_styles/`，DB 初始化时会重置并重新 seed `user_id = 'system'` 的记录。
 
@@ -131,6 +134,11 @@ FastAPI 的业务接口统一返回：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| `POST` | `/api/invites/claim` | 领取数据库邀请码并记录首次/最近使用时间 |
+| `POST` | `/api/admin/session` | 管理员账号密码登录，返回短期 HMAC 会话令牌 |
+| `GET` | `/api/admin/dashboard` | 7/30 天核心使用指标和趋势 |
+| `GET` | `/api/admin/users` | 已激活用户使用明细分页列表 |
+| `GET/POST/PATCH` | `/api/admin/invites` | 邀请码列表、生成和启停管理 |
 | `POST` | `/api/workspaces` | 创建工作区，包含用户配额和同名检测 |
 | `GET` | `/api/workspaces` | 按 `user_id` 列工作区 |
 | `GET` | `/api/workspaces/{id}` | 获取工作区和配置 |

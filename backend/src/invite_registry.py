@@ -55,6 +55,10 @@ class InviteRegistry:
         self._reload_if_possible()
         return user_id in self._valid_user_ids
 
+    def read_records(self) -> list[InviteRecord]:
+        """Read the configured file for one-time migration into SQLite."""
+        return self._read_records()
+
     def _reload_if_possible(self):
         try:
             records = self._read_records()

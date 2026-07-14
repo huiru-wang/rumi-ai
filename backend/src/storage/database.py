@@ -1,7 +1,7 @@
 import random
 import secrets
 import uuid
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import json
 from typing import Any
 
@@ -97,11 +97,26 @@ class Database:
                 revoked_at TEXT,
                 revoked_reason TEXT
             );
+            CREATE TABLE IF NOT EXISTS invite_code (
+                id TEXT PRIMARY KEY,
+                code TEXT NOT NULL UNIQUE,
+                user_id TEXT NOT NULL UNIQUE,
+                nickname TEXT NOT NULL,
+                enabled INTEGER NOT NULL DEFAULT 1,
+                expires_at TEXT,
+                claimed_at TEXT,
+                last_claimed_at TEXT,
+                claim_count INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_ppt_style_user ON ppt_style(user_id);
             CREATE INDEX IF NOT EXISTS idx_share_link_task_active
                 ON share_link(task_id, revoked_at);
             CREATE INDEX IF NOT EXISTS idx_message_thread_id_id
                 ON message(thread_id, id DESC);
+            CREATE INDEX IF NOT EXISTS idx_invite_claimed_at
+                ON invite_code(claimed_at);
             PRAGMA foreign_keys = ON;
         """)
         await self._migrate_tables()
@@ -113,7 +128,7 @@ class Database:
         if "error_message" not in columns:
             await self.connection.execute("ALTER TABLE document ADD COLUMN error_message TEXT")
         if "updated_at" not in columns:
-            await self.connection.execute(
+            cursor = await self.connection.execute(
                 "ALTER TABLE document ADD COLUMN updated_at TEXT DEFAULT (datetime('now', 'localtime'))"
             )
         if "content_hash" not in columns:
@@ -302,6 +317,406 @@ class Database:
         )
         row = await cursor.fetchone()
         return row["cnt"] if row else 0
+
+    # --- Invite codes ---
+
+    async def import_invites(self, records: list[dict]) -> int:
+        """Idempotently import legacy file-backed invite records."""
+        await self.ensure_initialized()
+        now = datetime.now(timezone.utc).isoformat()
+        imported = 0
+        for record in records:
+            code = str(record.get("code", "")).strip()
+            user_id = str(record.get("user_id", "")).strip()
+            if not code or not user_id:
+                continue
+            nickname = str(record.get("nickname", "")).strip() or code
+            cursor = await self.connection.execute(
+                """
+                INSERT INTO invite_code (
+                    id, code, user_id, nickname, enabled, expires_at, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                ON CONFLICT DO NOTHING
+                """,
+                (
+                    str(uuid.uuid4()),
+                    code,
+                    user_id,
+                    nickname,
+                    int(bool(record.get("enabled", True))),
+                    record.get("expires_at"),
+                    now,
+                    now,
+                ),
+            )
+            imported += max(cursor.rowcount, 0)
+        await self.connection.commit()
+        return imported
+
+    async def create_invite(
+        self,
+        nickname: str,
+        *,
+        expires_at: str | None = None,
+        code: str | None = None,
+    ) -> dict:
+        await self.ensure_initialized()
+        normalized_nickname = nickname.strip()
+        if not normalized_nickname:
+            raise ValueError("nickname is required")
+        now = datetime.now(timezone.utc).isoformat()
+        for _ in range(5):
+            invite_code = code or self._generate_invite_code()
+            invite_id = str(uuid.uuid4())
+            user_id = str(uuid.uuid4())
+            try:
+                await self.connection.execute(
+                    """
+                    INSERT INTO invite_code (
+                        id, code, user_id, nickname, enabled, expires_at, created_at, updated_at
+                    ) VALUES (?, ?, ?, ?, 1, ?, ?, ?)
+                    """,
+                    (
+                        invite_id,
+                        invite_code,
+                        user_id,
+                        normalized_nickname,
+                        expires_at,
+                        now,
+                        now,
+                    ),
+                )
+                await self.connection.commit()
+                return {
+                    "id": invite_id,
+                    "code": invite_code,
+                    "user_id": user_id,
+                    "nickname": normalized_nickname,
+                    "enabled": True,
+                    "expires_at": expires_at,
+                    "claimed_at": None,
+                    "last_claimed_at": None,
+                    "claim_count": 0,
+                    "created_at": now,
+                    "updated_at": now,
+                }
+            except aiosqlite.IntegrityError:
+                if code:
+                    raise ValueError("invite code already exists")
+        raise RuntimeError("failed to generate a unique invite code")
+
+    async def claim_invite(self, code: str) -> dict | None:
+        await self.ensure_initialized()
+        normalized_code = code.strip()
+        if not normalized_code:
+            return None
+        cursor = await self.connection.execute(
+            "SELECT * FROM invite_code WHERE code = ?", (normalized_code,)
+        )
+        row = await cursor.fetchone()
+        if not row or not row["enabled"] or self._invite_expired(row["expires_at"]):
+            return None
+        now = datetime.now(timezone.utc).isoformat()
+        claimed_at = row["claimed_at"] or now
+        await self.connection.execute(
+            """
+            UPDATE invite_code
+            SET claimed_at = ?, last_claimed_at = ?, claim_count = claim_count + 1, updated_at = ?
+            WHERE id = ?
+            """,
+            (claimed_at, now, now, row["id"]),
+        )
+        await self.connection.commit()
+        result = dict(row)
+        result.update(
+            claimed_at=claimed_at,
+            last_claimed_at=now,
+            claim_count=int(row["claim_count"]) + 1,
+            enabled=bool(row["enabled"]),
+        )
+        return result
+
+    async def is_valid_invited_user(self, user_id: str) -> bool:
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT enabled, expires_at FROM invite_code WHERE user_id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        return bool(row and row["enabled"] and not self._invite_expired(row["expires_at"]))
+
+    async def set_invite_enabled(self, invite_id: str, enabled: bool) -> dict | None:
+        await self.ensure_initialized()
+        now = datetime.now(timezone.utc).isoformat()
+        await self.connection.execute(
+            "UPDATE invite_code SET enabled = ?, updated_at = ? WHERE id = ?",
+            (int(enabled), now, invite_id),
+        )
+        await self.connection.commit()
+        cursor = await self.connection.execute(
+            "SELECT * FROM invite_code WHERE id = ?", (invite_id,)
+        )
+        row = await cursor.fetchone()
+        return self._invite_public_row(row) if row else None
+
+    async def list_invites(self, *, page: int = 1, page_size: int = 20) -> dict:
+        await self.ensure_initialized()
+        safe_page = max(page, 1)
+        safe_size = min(max(page_size, 1), 100)
+        cursor = await self.connection.execute("SELECT COUNT(*) AS count FROM invite_code")
+        total = int((await cursor.fetchone())["count"])
+        cursor = await self.connection.execute(
+            "SELECT * FROM invite_code ORDER BY created_at DESC LIMIT ? OFFSET ?",
+            (safe_size, (safe_page - 1) * safe_size),
+        )
+        return {
+            "items": [self._invite_public_row(row) for row in await cursor.fetchall()],
+            "total": total,
+            "page": safe_page,
+            "page_size": safe_size,
+        }
+
+    @staticmethod
+    def _generate_invite_code() -> str:
+        alphabet = "23456789ABCDEFGHJKLMNPQRSTUVWXYZ"
+        raw = "".join(secrets.choice(alphabet) for _ in range(8))
+        return f"RUMI-{raw[:4]}-{raw[4:]}"
+
+    @staticmethod
+    def _invite_expired(expires_at: str | None) -> bool:
+        if not expires_at:
+            return False
+        value = datetime.fromisoformat(expires_at.replace("Z", "+00:00"))
+        if value.tzinfo is None:
+            value = value.replace(tzinfo=timezone.utc)
+        return value.astimezone(timezone.utc) <= datetime.now(timezone.utc)
+
+    @staticmethod
+    def _invite_public_row(row: aiosqlite.Row) -> dict:
+        data = dict(row)
+        code = data.pop("code")
+        parts = code.split("-")
+        data["code_masked"] = (
+            f"{parts[0]}-****-{parts[-1]}" if len(parts) >= 3 else f"****{code[-4:]}"
+        )
+        data["enabled"] = bool(data["enabled"])
+        return data
+
+    # --- Admin analytics ---
+
+    async def get_admin_dashboard(self, *, days: int = 7) -> dict:
+        await self.ensure_initialized()
+        safe_days = 30 if days == 30 else 7
+        start_modifier = f"-{safe_days - 1} days"
+        active_sql = """
+            SELECT w.user_id, w.created_at AS active_at FROM workspace w
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            UNION ALL
+            SELECT w.user_id, d.created_at FROM document d
+            JOIN workspace w ON w.id = d.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            UNION ALL
+            SELECT w.user_id, m.created_at FROM message m
+            JOIN workspace w ON w.id = m.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE m.role = 'human'
+            UNION ALL
+            SELECT w.user_id, t.created_at FROM task t
+            JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+        """
+        total_users = await self._admin_scalar(
+            "SELECT COUNT(*) FROM invite_code WHERE claimed_at IS NOT NULL"
+        )
+        active_today = await self._admin_scalar(
+            f"SELECT COUNT(DISTINCT user_id) FROM ({active_sql}) "
+            "WHERE date(active_at) = date('now', 'localtime')"
+        )
+        active_7d = await self._admin_scalar(
+            f"SELECT COUNT(DISTINCT user_id) FROM ({active_sql}) "
+            "WHERE date(active_at) >= date('now', 'localtime', '-6 days')"
+        )
+        converted_users = await self._admin_scalar(
+            """
+            SELECT COUNT(DISTINCT w.user_id)
+            FROM task t JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE t.type = 'ppt' AND t.status = 'completed'
+            """
+        )
+        completed_ppts = await self._admin_scalar(
+            """
+            SELECT COUNT(*) FROM task t
+            JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE type = 'ppt' AND status = 'completed'
+              AND date(t.updated_at) >= date('now', 'localtime', ?)
+            """,
+            (start_modifier,),
+        )
+        completed_narrations = await self._admin_scalar(
+            """
+            SELECT COUNT(*) FROM task t
+            JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE type = 'narration' AND status = 'completed'
+              AND date(t.updated_at) >= date('now', 'localtime', ?)
+            """,
+            (start_modifier,),
+        )
+
+        trends = await self._admin_trends(safe_days, active_sql)
+        return {
+            "range_days": safe_days,
+            "kpis": {
+                "total_users": total_users,
+                "active_today": active_today,
+                "active_7d": active_7d,
+                "core_conversion_rate": round(
+                    converted_users * 100 / total_users, 1
+                )
+                if total_users
+                else 0.0,
+                "completed_ppts": completed_ppts,
+                "completed_narrations": completed_narrations,
+            },
+            "trends": trends,
+        }
+
+    async def list_admin_users(
+        self, *, page: int = 1, page_size: int = 20, keyword: str = ""
+    ) -> dict:
+        await self.ensure_initialized()
+        safe_page = max(page, 1)
+        safe_size = min(max(page_size, 1), 100)
+        pattern = f"%{keyword.strip()}%"
+        where = "i.claimed_at IS NOT NULL AND (i.nickname LIKE ? OR i.user_id LIKE ?)"
+        cursor = await self.connection.execute(
+            f"SELECT COUNT(*) AS count FROM invite_code i WHERE {where}",
+            (pattern, pattern),
+        )
+        total = int((await cursor.fetchone())["count"])
+        cursor = await self.connection.execute(
+            f"""
+            SELECT
+                i.user_id, i.nickname, i.claimed_at, i.last_claimed_at,
+                i.enabled,
+                (SELECT COUNT(*) FROM workspace w WHERE w.user_id = i.user_id) AS workspace_count,
+                (SELECT COUNT(*) FROM document d JOIN workspace w ON w.id = d.workspace_id
+                    WHERE w.user_id = i.user_id) AS document_count,
+                (SELECT COUNT(*) FROM message m JOIN workspace w ON w.id = m.workspace_id
+                    WHERE w.user_id = i.user_id AND m.role = 'human') AS message_count,
+                (SELECT COUNT(*) FROM task t JOIN workspace w ON w.id = t.workspace_id
+                    WHERE w.user_id = i.user_id AND t.type = 'ppt' AND t.status = 'completed') AS ppt_count,
+                (SELECT COUNT(*) FROM task t JOIN workspace w ON w.id = t.workspace_id
+                    WHERE w.user_id = i.user_id AND t.type = 'narration' AND t.status = 'completed') AS narration_count,
+                (SELECT COUNT(*) FROM share_link s JOIN workspace w ON w.id = s.workspace_id
+                    WHERE w.user_id = i.user_id) AS share_count,
+                (SELECT MAX(active_at) FROM (
+                    SELECT w.created_at AS active_at FROM workspace w WHERE w.user_id = i.user_id
+                    UNION ALL
+                    SELECT d.created_at FROM document d JOIN workspace w ON w.id = d.workspace_id
+                        WHERE w.user_id = i.user_id
+                    UNION ALL
+                    SELECT m.created_at FROM message m JOIN workspace w ON w.id = m.workspace_id
+                        WHERE w.user_id = i.user_id AND m.role = 'human'
+                    UNION ALL
+                    SELECT t.created_at FROM task t JOIN workspace w ON w.id = t.workspace_id
+                        WHERE w.user_id = i.user_id
+                )) AS last_active_at
+            FROM invite_code i
+            WHERE {where}
+            ORDER BY COALESCE(last_active_at, i.claimed_at) DESC
+            LIMIT ? OFFSET ?
+            """,
+            (pattern, pattern, safe_size, (safe_page - 1) * safe_size),
+        )
+        items = []
+        for row in await cursor.fetchall():
+            item = dict(row)
+            item["enabled"] = bool(item["enabled"])
+            items.append(item)
+        return {
+            "items": items,
+            "total": total,
+            "page": safe_page,
+            "page_size": safe_size,
+        }
+
+    async def _admin_trends(self, days: int, active_sql: str) -> list[dict]:
+        start_modifier = f"-{days - 1} days"
+        cursor = await self.connection.execute(
+            f"""
+            SELECT date(active_at) AS day, COUNT(DISTINCT user_id) AS count
+            FROM ({active_sql})
+            WHERE date(active_at) >= date('now', 'localtime', ?)
+            GROUP BY date(active_at)
+            """,
+            (start_modifier,),
+        )
+        active = {row["day"]: int(row["count"]) for row in await cursor.fetchall()}
+
+        async def daily_counts(sql: str) -> dict[str, int]:
+            inner = await self.connection.execute(sql, (start_modifier,))
+            return {row["day"]: int(row["count"]) for row in await inner.fetchall()}
+
+        messages = await daily_counts(
+            """
+            SELECT date(m.created_at) AS day, COUNT(*) AS count FROM message m
+            JOIN workspace w ON w.id = m.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE m.role = 'human' AND date(m.created_at) >= date('now', 'localtime', ?)
+            GROUP BY date(m.created_at)
+            """
+        )
+        documents = await daily_counts(
+            """
+            SELECT date(d.created_at) AS day, COUNT(*) AS count FROM document d
+            JOIN workspace w ON w.id = d.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE date(d.created_at) >= date('now', 'localtime', ?)
+            GROUP BY date(d.created_at)
+            """
+        )
+        ppts = await daily_counts(
+            """
+            SELECT date(t.updated_at) AS day, COUNT(*) AS count FROM task t
+            JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE t.type = 'ppt' AND t.status = 'completed'
+              AND date(t.updated_at) >= date('now', 'localtime', ?)
+            GROUP BY date(t.updated_at)
+            """
+        )
+        narrations = await daily_counts(
+            """
+            SELECT date(t.updated_at) AS day, COUNT(*) AS count FROM task t
+            JOIN workspace w ON w.id = t.workspace_id
+            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            WHERE t.type = 'narration' AND t.status = 'completed'
+              AND date(t.updated_at) >= date('now', 'localtime', ?)
+            GROUP BY date(t.updated_at)
+            """
+        )
+        today = datetime.now().date()
+        result = []
+        for offset in range(days - 1, -1, -1):
+            day = (today - timedelta(days=offset)).isoformat()
+            result.append(
+                {
+                    "date": day,
+                    "active_users": active.get(day, 0),
+                    "human_messages": messages.get(day, 0),
+                    "documents": documents.get(day, 0),
+                    "completed_ppts": ppts.get(day, 0),
+                    "completed_narrations": narrations.get(day, 0),
+                }
+            )
+        return result
+
+    async def _admin_scalar(self, sql: str, params: tuple = ()) -> int:
+        cursor = await self.connection.execute(sql, params)
+        row = await cursor.fetchone()
+        return int(row[0] or 0)
 
     # --- Workspace ---
 

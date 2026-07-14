@@ -617,3 +617,147 @@ export async function fetchFileContent(fileUrl: string): Promise<string> {
   }
   return response.text();
 }
+
+// --- Admin ---
+
+export interface AdminTrendPoint {
+  date: string;
+  active_users: number;
+  human_messages: number;
+  documents: number;
+  completed_ppts: number;
+  completed_narrations: number;
+}
+
+export interface AdminDashboard {
+  range_days: 7 | 30;
+  kpis: {
+    total_users: number;
+    active_today: number;
+    active_7d: number;
+    core_conversion_rate: number;
+    completed_ppts: number;
+    completed_narrations: number;
+  };
+  trends: AdminTrendPoint[];
+}
+
+export interface AdminUserSummary {
+  user_id: string;
+  nickname: string;
+  claimed_at: string;
+  last_claimed_at: string;
+  last_active_at: string | null;
+  enabled: boolean;
+  workspace_count: number;
+  document_count: number;
+  message_count: number;
+  ppt_count: number;
+  narration_count: number;
+  share_count: number;
+}
+
+export interface AdminInvite {
+  id: string;
+  user_id: string;
+  nickname: string;
+  enabled: boolean;
+  expires_at: string | null;
+  claimed_at: string | null;
+  last_claimed_at: string | null;
+  claim_count: number;
+  code_masked: string;
+  created_at: string;
+}
+
+export interface AdminPage<T> {
+  items: T[];
+  total: number;
+  page: number;
+  page_size: number;
+}
+
+async function adminRequest<T>(
+  path: string,
+  token: string | null,
+  options?: RequestInit,
+): Promise<T> {
+  let response: Response;
+  try {
+    response = await fetch(`${API_BASE}${path}`, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options?.headers,
+      },
+    });
+  } catch {
+    throw new Error(GENERIC_API_ERROR);
+  }
+  let body: (ApiResponse<T> & { detail?: string }) | null = null;
+  try {
+    body = await response.json();
+  } catch {
+    // The status fallback below is safe and user-facing.
+  }
+  if (!response.ok) {
+    throw new Error(body?.detail || (response.status === 401 ? "请重新登录管理后台" : GENERIC_API_ERROR));
+  }
+  if (!body || body.code !== 0) {
+    throw new Error(body?.message || GENERIC_API_ERROR);
+  }
+  return body.data;
+}
+
+export function loginAdmin(username: string, password: string): Promise<{ token: string; username: string }> {
+  return adminRequest("/api/admin/session", null, {
+    method: "POST",
+    body: JSON.stringify({ username, password }),
+  });
+}
+
+export function getAdminDashboard(token: string, days: 7 | 30): Promise<AdminDashboard> {
+  return adminRequest(`/api/admin/dashboard?days=${days}`, token);
+}
+
+export function listAdminUsers(
+  token: string,
+  options: { page?: number; pageSize?: number; keyword?: string } = {},
+): Promise<AdminPage<AdminUserSummary>> {
+  const params = new URLSearchParams({
+    page: String(options.page ?? 1),
+    page_size: String(options.pageSize ?? 20),
+    keyword: options.keyword ?? "",
+  });
+  return adminRequest(`/api/admin/users?${params}`, token);
+}
+
+export function listAdminInvites(
+  token: string,
+  page = 1,
+): Promise<AdminPage<AdminInvite>> {
+  return adminRequest(`/api/admin/invites?page=${page}&page_size=20`, token);
+}
+
+export function createAdminInvite(
+  token: string,
+  nickname: string,
+  expiresAt: string | null,
+): Promise<AdminInvite & { code: string }> {
+  return adminRequest("/api/admin/invites", token, {
+    method: "POST",
+    body: JSON.stringify({ nickname, expires_at: expiresAt }),
+  });
+}
+
+export function updateAdminInvite(
+  token: string,
+  inviteId: string,
+  enabled: boolean,
+): Promise<AdminInvite> {
+  return adminRequest(`/api/admin/invites/${encodeURIComponent(inviteId)}`, token, {
+    method: "PATCH",
+    body: JSON.stringify({ enabled }),
+  });
+}

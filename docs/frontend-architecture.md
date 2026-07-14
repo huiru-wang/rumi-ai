@@ -45,9 +45,11 @@ flowchart LR
 frontend/src/
 ├── app/
 │   ├── page.tsx                     # 首页：工作区列表
+│   ├── admin/page.tsx               # 移动端友好的管理后台
 │   ├── workspace/[id]/page.tsx      # 工作区主页面
 │   └── share/[token]/page.tsx       # 公开分享播放页
 ├── components/
+│   ├── admin/admin-utils.ts          # 管理会话与原生 SVG 趋势图辅助
 │   ├── chat/
 │   │   ├── assistant.tsx            # LangGraph useStream + 历史消息
 │   │   ├── chat-panel.tsx           # 聊天面板容器
@@ -81,12 +83,17 @@ frontend/src/
 | 路由 | 文件 | 说明 |
 |------|------|------|
 | `/` | `app/page.tsx` | 工作区列表，新建、删除、进入工作区 |
+| `/admin` | `app/admin/page.tsx` | 管理员登录、使用看板、用户明细、邀请码管理 |
 | `/workspace/[id]` | `app/workspace/[id]/page.tsx` | 文档、聊天、配置、产出、预览、播放、风格提取 |
 | `/share/[token]` | `app/share/[token]/page.tsx` | 公开访问 PPT 或口播稿播放页 |
 
 ### 首页
 
 首页通过 `getUserId()` 从 localStorage 读取或生成用户 ID，然后调用 `listWorkspaces(userId)`。创建工作区后进入 `/workspace/[id]`，删除工作区会刷新列表。
+
+### 管理后台
+
+`/admin` 使用账号密码换取短期管理会话令牌，令牌只保存在 `sessionStorage`。后台包含看板、用户和邀请码三个页签；手机端使用底部导航和卡片列表，桌面端使用顶部导航。趋势图由原生 SVG 绘制，不引入额外图表库。管理 API 仍集中在 `lib/api.ts`。
 
 ### 工作区页面
 
