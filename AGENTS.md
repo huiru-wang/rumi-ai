@@ -111,7 +111,7 @@ pnpm build && pnpm start                                    # 生产构建
 
 - Add or change FastAPI endpoints in `backend/src/api/routes.py`.
 - Add new dependencies to `backend/src/api/deps.py` (FastAPI process) or `backend/src/agent/graph.py` (LangGraph process).
-- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`, `share_link`, `invite_code`.
+- Keep database operations in `backend/src/storage/database.py`. Tables: `workspace`, `document`, `task`, `message`, `ppt_style`, `share_link`, `invite_code`, `app_user`, `system_setting`.
   - `workspace` has `ext_data` JSON column for config (`ppt_style` stores style ID like `sys-swiss-modern`, `voice_info` stores `{id, name, trait, gender}`).
   - `document` has `content_hash` column for duplicate detection.
   - `task` has `parent_task_id` for parent-child hierarchy (e.g., narration tasks under PPT tasks). Task types: `ppt`, `narration`, `ppt_style_extraction`.
@@ -119,6 +119,8 @@ pnpm build && pnpm start                                    # 生产构建
   - `ppt_style` stores system builtin + user custom PPT styles (id, category, name, name_en, description, style_description, resource_manifest, preview_path). System style IDs are prefixed with `sys-`.
   - `share_link` stores active/revoked share tokens for completed PPT and narration tasks.
   - `invite_code` stores generated/imported invite codes, user identity, activation time, enabled state, and claim counts. `INVITE_CODES_FILE` is legacy startup import only; SQLite is the runtime source of truth.
+  - `app_user` is the canonical identity list for invited users and open-access visitors. Never implement open access with one shared public user.
+  - `system_setting.invite_required` defaults to true and controls the FastAPI workspace access gate. Open visitors retain their data when the gate is re-enabled.
 - Keep vector behavior in `backend/src/storage/vector_store.py`. ChromaDB via **HTTP server** (`HttpClient`), both processes share the same server. Collections are per-workspace: `ws_{workspace_id}`. Config: `CHROMA_HOST`, `CHROMA_PORT` env vars.
 - Keep file operations in `backend/src/storage/file_store.py`. FileStore delegates to `StorageProvider` (LocalProvider or OSSProvider). New path structure: `user/{user_id}/workspace/{workspace_id}/docs|ppt|style/...`. Smart routing handles legacy absolute paths transparently.
 - Keep storage provider abstraction in `backend/src/storage/providers.py`. `StorageProvider` ABC with `LocalProvider` (filesystem) and `OSSProvider` (Alibaba Cloud OSS). Toggle via `OSS_ENABLE` env var.
@@ -153,7 +155,7 @@ pnpm build && pnpm start                                    # 生产构建
 - PPT preview/edit lives in `frontend/src/components/player/ppt-preview-dialog.tsx` (iframe srcDoc, edit mode via contentEditable).
 - PPT playback lives in `frontend/src/components/player/ppt-player-dialog.tsx` (slide-by-slide audio sync, fullscreen).
 - Public share playback lives in `frontend/src/app/share/[token]/page.tsx`. It consumes safe share URLs from `getShareDetail()` and never storage paths.
-- Admin UI lives in `frontend/src/app/admin/page.tsx`; keep it mobile-first, protect all admin APIs with the short-lived admin bearer session, and never expose chat/document contents in analytics responses.
+- Admin UI lives in `frontend/src/app/admin/page.tsx`; keep it mobile-first, protect all admin APIs with the short-lived admin bearer session, and never expose chat/document contents in analytics responses. The invite-mode switch is stored server-side and must default to enabled.
 - Keep document, chat, task, and layout UI in their existing component folders.
 - Follow the local Tailwind and component style already in the app (dark theme, CSS variables).
 - No global state library — each panel manages its own state via `useState` + polling.

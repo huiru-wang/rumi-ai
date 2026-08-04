@@ -1,274 +1,194 @@
 # RumiAI
 
-RumiAI 是一个文档驱动的 AI 工作台，帮助用户基于上传的文档进行知识问答、PPT 生成、口播稿生成、TTS 音频合成和 PPT 风格提取。
+RumiAI 是一个文档驱动的 AI 工作台。上传资料后，可以在同一工作区完成知识问答、PPT 生成、口播稿编写、语音合成和 PPT 风格提取。
 
-## 架构概览
+## 产品特点
 
-本地开发栈由 4 个服务组成：
+### 基于资料的知识问答
 
-| 服务 | 端口 | 说明 |
-|------|-----:|------|
-| FastAPI Backend | 8000 | REST API，管理工作区/文档/任务/消息/PPT风格 |
-| LangGraph Server | 2024 | Agent 流式运行时，对话+工具调用 |
-| ChromaDB | 8001 | 向量数据库，文档 Embedding 存储与检索 |
-| Next.js Frontend | 3000 | 工作台 UI（文档、聊天、任务、配置、播放面板） |
+- 支持 PDF、Word、Markdown 和 PPTX 等常见文档
+- 自动解析、分块、建立向量索引，并生成文档摘要
+- 回答基于当前工作区资料，可追溯引用来源
 
-后端采用**双进程架构**：FastAPI 负责 CRUD，LangGraph 负责 Agent 推理，两者共享 SQLite + ChromaDB + 文件存储，但各自维护独立的依赖实例。
+### 从内容到演示文稿
 
-## 快速开始
+- 根据资料和对话直接生成 PPT
+- 支持多种内置风格，也可以从已有 PPTX 中提取自定义风格
+- 提供在线预览、内容编辑、下载和公开分享
 
-### 前置条件
+### 口播稿与语音合成
 
-在开始之前，确保系统已安装：
+- 基于已生成的 PPT 创建逐页口播稿
+- 支持选择音色并合成 TTS 音频
+- 提供按页播放以及 PPT、音频同步演示
 
-| 工具 | 最低版本 | 说明 |
-|------|---------|------|
-| Python | >= 3.12 | 后端运行时 |
-| Node.js | >= 22 | 前端运行时（pnpm 10+ 要求） |
+### 一体化工作区
 
-> Python 和 Node.js 的安装由用户自行处理（推荐 pyenv / nvm）。
+- 每个工作区独立管理文档、对话、任务和产出物
+- 支持本地文件存储或阿里云 OSS
+- 管理后台提供用户活跃、内容产出、邀请码和访问模式管理
+- 邀请码模式可随时关闭；关闭后访客可直接使用全部功能，并拥有独立的数据空间
 
-### 一键初始化
+## 本地启动与部署
+
+### 环境要求
+
+| 工具 | 版本 |
+|------|------|
+| Python | >= 3.12 |
+| Node.js | >= 22 |
+
+项目脚本会自动检查并安装 `uv`、`pnpm` 等辅助工具。
+
+### 1. 初始化
 
 ```bash
+git clone https://github.com/huiru-wang/rumi-ai.git
+cd rumi-ai
 ./scripts/init.sh
 ```
 
-该脚本会自动完成以下操作：
+初始化脚本会创建 `backend/.env`、运行时数据目录，并安装前后端依赖。
 
-1. 检查并安装系统工具：`uv`、`pnpm`（或 npm）、`perl`、`lsof`
-2. 创建 `backend/.env`（从模板复制）
-3. 创建数据目录 `backend/data/{chroma,files}`
-4. 安装 Python 依赖（`uv sync`）
-5. 安装前端依赖（`pnpm install`）
+### 2. 配置 API Key
 
-### 配置环境变量
+编辑 `backend/.env`。最少需要配置 LLM 和 Embedding 服务：
 
-编辑 `backend/.env`，填入必要的 API Key：
+```env
+OPENAI_API_KEY=your_api_key
+OPENAI_API_BASE=https://api.deepseek.com
+MAIN_MODEL=deepseek-v4-flash
 
-| 变量 | 用途 | 是否必须 |
-|------|------|---------|
-| `OPENAI_API_KEY` | Agent LLM 推理 + 文档摘要 | **必须** |
-| `OPENAI_API_BASE` | DeepSeek API 地址 | 默认 `https://api.deepseek.com` |
+EMBEDDING_API_KEY=your_dashscope_api_key
+EMBEDDING_MODEL=text-embedding-v2
+```
+
+常用配置：
+
+| 变量 | 用途 | 要求 |
+|------|------|------|
+| `OPENAI_API_KEY` | Agent 推理和文档摘要 | 必须 |
+| `OPENAI_API_BASE` | OpenAI 兼容接口地址 | 默认 DeepSeek |
 | `MAIN_MODEL` | Agent 主模型 | 默认 `deepseek-v4-flash` |
-| `DATA_DIR` | 项目数据根目录，包含 SQLite、Chroma、本地文件和 workspace 工作目录 | 默认 `./data`，生产建议 `/data/rumi-ai` |
-| `PUBLIC_API_BASE` | 对外可访问的 FastAPI 地址，用于生成 PPT 图片资源代理 URL | 默认 `http://localhost:8000` |
-| `INVITE_CODES_FILE` | 旧邀请码映射文件，仅在 FastAPI 启动时幂等导入 SQLite | 默认 `./data/invites.json` |
-| `ADMIN_USERNAME` | 管理后台登录账号 | 使用管理后台时必须配置 |
-| `ADMIN_PASSWORD` | 管理后台登录密码 | 使用管理后台时必须配置 |
-| `ADMIN_SESSION_SECRET` | 管理后台会话签名密钥，生产环境使用随机长字符串 | 使用管理后台时必须配置 |
-| `EMBEDDING_API_KEY` | 向量 Embedding（Dashscope） | **必须** |
-| `EMBEDDING_API_BASE` | Embedding API 地址 | 默认 Dashscope |
+| `EMBEDDING_API_KEY` | 文档向量化 | 必须 |
+| `EMBEDDING_API_BASE` | Embedding 接口地址 | 默认 Dashscope |
 | `EMBEDDING_MODEL` | Embedding 模型 | 默认 `text-embedding-v2` |
-| `TTS_API_KEY` | TTS 语音合成（Dashscope） | 可选 |
-| `TTS_MODEL` | TTS 模型 | 默认 `qwen3-tts-flash` |
-| `VISION_API_KEY` | 视觉模型（PPT 风格提取） | 可选 |
-| `VISION_MODEL` | 视觉模型 | 默认 `qwen3.5-flash` |
-| `LANGSMITH_API_KEY` | 链路追踪 | 可选 |
-| `OSS_ACCESS_KEY_ID/SECRET` | 阿里云 OSS 存储 | 可选（默认本地存储） |
+| `TTS_API_KEY` / `TTS_MODEL` | 语音合成 | 可选 |
+| `VISION_API_KEY` / `VISION_MODEL` | PPT 风格提取 | 可选 |
+| `ADMIN_USERNAME` | 管理后台账号 | 使用管理后台时配置 |
+| `ADMIN_PASSWORD` | 管理后台密码 | 使用管理后台时配置 |
+| `ADMIN_SESSION_SECRET` | 管理会话签名密钥 | 生产环境使用随机长字符串 |
+| `DATA_DIR` | SQLite、Chroma 和文件数据目录 | 默认 `./data` |
+| `PUBLIC_API_BASE` | 对外可访问的 FastAPI 地址 | 默认 `http://localhost:8000` |
+| `OSS_ACCESS_KEY_ID/SECRET` | 阿里云 OSS 存储 | 可选，默认本地存储 |
+| `LANGSMITH_API_KEY` | Agent 链路追踪 | 可选 |
+| `INVITE_CODES_FILE` | 旧邀请码 JSON 的启动导入路径 | 仅兼容旧数据，可不配置 |
 
-### 启动服务
+### 3. 启动
 
 ```bash
 ./scripts/start.sh
 ```
 
-启动后访问 `http://localhost:3000/admin` 进入管理后台。后台提供使用看板、用户使用明细和邀请码管理；新邀请码生成后可立即在首页使用。
+启动完成后：
 
-启动后访问 **http://localhost:3000** 即可使用。
+- 工作台：[http://localhost:3000](http://localhost:3000)
+- 管理后台：[http://localhost:3000/admin](http://localhost:3000/admin)
 
-### 验证
+检查服务状态：
 
 ```bash
-./scripts/doctor.sh   # 健康检查，确认所有依赖和端口就绪
+./scripts/doctor.sh
 ```
 
-## 依赖清单
-
-### 系统工具
-
-| 工具 | 用途 | 安装方式 |
-|------|------|---------|
-| Python >= 3.12 | 后端运行时 | pyenv / brew / apt |
-| Node.js >= 22 | 前端运行时 | nvm / brew |
-| uv | Python 包管理器 | `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
-| pnpm（或 npm） | 前端包管理器 | `npm install -g pnpm` |
-| perl | 日志时间戳转换 | macOS 自带 / `apt install perl` |
-| lsof | 端口检测 | macOS 自带 / `apt install lsof` |
-
-### Python 依赖（后端）
-
-通过 `uv sync` 安装，定义在 `backend/pyproject.toml`：
-
-**核心框架**
-- `langchain >= 1.2.3` — Agent 框架
-- `langgraph >= 1.1.9` — Agent 图运行时
-- `langgraph-api >= 0.10.0` / `langgraph-cli >= 0.4.27` — LangGraph 开发服务器
-- `langchain-openai >= 0.3` — OpenAI 兼容 LLM 集成
-- `langchain-community >= 0.3` — 社区组件
-- `langchain-text-splitters >= 0.3` — 文本分块
-- `langchain-deepseek >= 1.1.0` — DeepSeek 模型适配
-
-**Web 框架**
-- `fastapi >= 0.115` / `uvicorn >= 0.34` — REST API 服务器
-
-**存储**
-- `chromadb >= 1.0` — 向量数据库
-- `aiosqlite >= 0.21` — 异步 SQLite
-
-**文档处理**
-- `python-docx >= 1.1` — Word 文档解析
-- `pymupdf >= 1.25` — PDF 解析
-- `python-pptx >= 1.0` — PPTX 解析
-- `Pillow >= 10.0` — 图片处理
-
-**AI 服务**
-- `dashscope >= 1.20` — 阿里云 Dashscope SDK（Embedding + TTS + Vision）
-
-**工具库**
-- `httpx >= 0.28` — HTTP 客户端
-- `python-dotenv >= 1.1` — 环境变量加载
-- `pyyaml >= 6.0` — YAML 解析
-- `python-multipart >= 0.0.20` — 文件上传
-
-**可选依赖**
-- `oss2 >= 2.18` — 阿里云 OSS 存储（`uv sync --extra oss`）
-- `pytest >= 8` / `pytest-asyncio >= 0.25` / `ruff >= 0.11` — 开发工具（`uv sync --extra dev`）
-
-### Node 依赖（前端）
-
-通过 `pnpm install` 安装，定义在 `frontend/package.json`：
-
-**框架**
-- `next 16` — React 全栈框架（App Router）
-- `react 19` / `react-dom 19` — UI 库
-
-**AI 通信**
-- `@langchain/core ^1.1` — LangChain 核心类型
-- `@langchain/langgraph-sdk ^1.9` — LangGraph 客户端 SDK
-- `@langchain/react ^1.0` — React 流式 Hook
-
-**UI 组件**
-- `@assistant-ui/react ^0.14` / `@assistant-ui/react-langchain` / `@assistant-ui/react-markdown` — 聊天 UI
-- `react-markdown ^10.1` / `remark-gfm ^4.0` — Markdown 渲染
-- `react-syntax-highlighter ^16.1` — 代码高亮
-- `lucide-react ^1.16` — 图标库
-- `zustand ^5.0` — 轻量状态管理
-
-**开发工具**
-- `tailwindcss ^4` / `@tailwindcss/postcss` — CSS 框架
-- `typescript ^5` — 类型系统
-- `eslint ^9` / `eslint-config-next` — 代码检查
-
-### 外部 API 服务
-
-| 服务 | 用途 | 申请地址 |
-|------|------|---------|
-| DeepSeek API | Agent LLM + 文档摘要 | https://platform.deepseek.com |
-| Dashscope | Embedding + TTS + Vision | https://dashscope.console.aliyun.com |
-| LangSmith（可选） | 链路追踪 | https://smith.langchain.com |
-
-## 日常开发命令
+### 日常开发命令
 
 ```bash
-# 启动所有服务
+# 启动、重启和停止开发环境
 ./scripts/start.sh dev
-
-# 停止所有服务
-./scripts/stop.sh dev
-
-# 重启所有服务
 ./scripts/restart.sh dev
-
-# 健康检查
-./scripts/doctor.sh dev
+./scripts/stop.sh dev
 
 # 后端测试
 cd backend && uv run pytest tests/
 
-# 前端 lint + build
+# 前端检查与构建
 cd frontend && pnpm lint && pnpm build
 ```
 
-## 多环境启动
+### 生产部署
 
-脚本支持 `dev` 和 `prod` 两套运行配置，配置文件位于 `scripts/config/`。
+项目内置 `dev` 和 `prod` 两套启动配置。生产环境建议由 Nginx 统一反向代理，并将数据目录设置到持久化磁盘。
 
 ```bash
-# 开发环境：前端 3000，后端服务对本机/局域网开放，启用 reload/dev server
-./scripts/start.sh dev
-
-# 生产环境：前端 3000，内部服务绑定 127.0.0.1，由 Nginx 反代 rumi.robinverse.me
 cp backend/.env.production.example backend/.env.production
-# 编辑 backend/.env.production，填入生产 API Key / OSS / DATA_DIR 等配置；DATA_DIR 建议使用绝对路径，如 /data/rumi-ai
+# 编辑 backend/.env.production，配置 API Key、管理后台账号和 DATA_DIR
+
 ./scripts/doctor.sh prod
 ./scripts/start.sh prod
 ```
 
-生产启动时脚本会把 `backend/.env.production` 同步到 `backend/.env`，这是因为 LangGraph 配置文件当前固定从 `.env` 加载运行时环境变量。
-
-生产环境前端公开配置模板在 `frontend/.env.production.example`，`./scripts/start.sh prod` 会从 `scripts/config/prod.env` 注入同样的公开变量：
+前端公开地址配置位于 `frontend/.env.production.example`：
 
 ```env
-NEXT_PUBLIC_API_BASE=https://rumi.robinverse.me
-NEXT_PUBLIC_LANGGRAPH_API_URL=https://rumi.robinverse.me/lg
+NEXT_PUBLIC_API_BASE=https://your-domain.example
+NEXT_PUBLIC_LANGGRAPH_API_URL=https://your-domain.example/lg
 ```
 
 生产端口约定：
 
-| 服务 | 端口 | 暴露方式 |
-|------|-----:|----------|
-| Next.js Frontend | 3000 | Nginx `/` 反代 |
-| FastAPI Backend | 8000 | Nginx `/api/` 反代 |
-| LangGraph Server | 2024 | Nginx `/lg/` 反代 |
-| ChromaDB | 8001 | 仅本机访问，不开放公网 |
+| 服务 | 端口 | 建议暴露方式 |
+|------|-----:|--------------|
+| Next.js | 3000 | Nginx `/` |
+| FastAPI | 8000 | Nginx `/api/` |
+| LangGraph | 2024 | Nginx `/lg/` |
+| ChromaDB | 8001 | 仅本机访问 |
 
-`scripts/config/prod.env` 默认使用国内镜像加速依赖安装：
+## 技术架构
 
-```env
-npm_config_registry=https://registry.npmmirror.com
-UV_INDEX_URL=https://mirrors.aliyun.com/pypi/simple
+RumiAI 使用前后端分离的双进程后端架构：FastAPI 处理业务 API，LangGraph 负责 Agent 推理和流式对话。两个进程共享同一套存储。
+
+```mermaid
+flowchart LR
+    U["浏览器"] --> F["Next.js 工作台"]
+    F --> A["FastAPI · REST API"]
+    F --> G["LangGraph · Agent 运行时"]
+    A --> S["共享存储层"]
+    G --> S
+    S --> D["SQLite · 业务数据"]
+    S --> C["ChromaDB · 向量索引"]
+    S --> O["Local / OSS · 文件"]
 ```
 
-## 项目结构
+| 层 | 主要技术 | 职责 |
+|----|----------|------|
+| 前端 | Next.js 16、React 19、Tailwind CSS 4 | 工作区、对话、文档、任务、播放和管理后台 |
+| REST API | FastAPI、aiosqlite | 工作区、文档、任务、分享、邀请码和运营数据 |
+| Agent | LangGraph、LangChain | 流式对话、工具调用、RAG、PPT 和口播稿生成 |
+| 存储 | SQLite、ChromaDB、Local/OSS | 元数据、消息、向量索引和产出文件 |
+| AI 服务 | OpenAI 兼容 LLM、Dashscope | 推理、Embedding、TTS 和视觉理解 |
 
-```
+核心目录：
+
+```text
 rumi-ai/
 ├── backend/
-│   ├── skills/             # Agent 技能（ppt、narration）
-│   ├── src/
-│   │   ├── api/            # FastAPI 路由 + 依赖注入
-│   │   ├── agent/          # LangGraph Agent 入口 + 状态管理
-│   │   ├── managers/       # 业务管理器（文档、TTS、提示词、技能、风格提取）
-│   │   ├── middlewares/    # Agent 中间件（上下文注入、上下文摘要、日志等）
-│   │   ├── tools/          # Agent 工具（rag_search、save_ppt 等）
-│   │   ├── parsers/        # 文档解析器（PDF、DOCX、Markdown）
-│   │   ├── storage/        # 存储抽象层（SQLite、ChromaDB、FileStore）
-│   │   └── app_context.py  # 统一依赖入口
-│   ├── data/               # 运行时数据（SQLite、ChromaDB、文件）
-│   ├── tests/              # 后端测试
-│   ├── pyproject.toml      # Python 依赖定义
-│   ├── langgraph.json      # LangGraph 配置
-│   └── .env                # 环境变量（不提交）
-├── frontend/
-│   ├── src/
-│   │   ├── app/            # Next.js 路由（首页、工作区页）
-│   │   ├── components/     # UI 组件（chat、config、player、document、task）
-│   │   └── lib/            # API 客户端
-│   ├── package.json        # Node 依赖定义
-│   └── .next/              # 构建产物
-├── scripts/                # 开发运维脚本
-│   ├── init.sh             # 从零初始化
-│   ├── start.sh            # 启动所有服务
-│   ├── stop.sh             # 停止所有服务
-│   ├── restart.sh          # 重启所有服务
-│   └── doctor.sh           # 健康检查
-├── docs/                   # 架构文档
-├── AGENTS.md               # AI 协作规范
-└── README.md               # 本文档
+│   ├── src/api/          # FastAPI 路由与依赖
+│   ├── src/agent/        # LangGraph Agent
+│   ├── src/managers/     # 文档、TTS、风格等业务管理器
+│   ├── src/storage/      # SQLite、ChromaDB、文件存储
+│   ├── src/tools/        # Agent 工具
+│   ├── skills/           # PPT、口播稿等 Agent 技能
+│   └── tests/
+├── frontend/src/        # Next.js 页面、组件和 API 客户端
+├── scripts/             # 初始化、启动、停止和健康检查
+└── docs/                # 详细架构文档
 ```
 
-## 开发规范
+更多设计细节：
 
-- 详细开发规范、模块职责和代码约定见 `AGENTS.md`
-- 架构设计文档见 `docs/backend-architecture.md` 和 `docs/frontend-architecture.md`
+- [后端架构](docs/backend-architecture.md)
+- [前端架构](docs/frontend-architecture.md)
+- [文档解析架构](docs/document-parsing-architecture.md)
+- [PPT 风格提取架构](docs/style-extraction-architecture.md)
+- [开发与协作规范](AGENTS.md)

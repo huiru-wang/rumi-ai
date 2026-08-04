@@ -10,6 +10,7 @@ class BusinessErrorCode(Enum):
     WORKSPACE_NAME_EXISTS = (10002, "工作区名称已存在。", False)
     WORKSPACE_NOT_FOUND = (10003, "工作区不存在。", False)
     INVITE_INVALID = (10004, "邀请码无效或已停用。", False)
+    OPEN_ACCESS_DISABLED = (10005, "当前需要邀请码才能访问。", False)
 
     # Documents: 2xxxx
     DOCUMENT_QUOTA = (20001, "文档数量已达上限，请删除旧文档后重试。", False)

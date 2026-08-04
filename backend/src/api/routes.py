@@ -136,6 +136,23 @@ async def startup():
     logger.info("[API] database initialized")
 
 
+# --- Access mode ---
+
+
+@app.get("/api/access-mode")
+async def get_access_mode():
+    return success_response({"invite_required": await db.get_invite_required()})
+
+
+@app.post("/api/access/open-user")
+async def create_open_access_user():
+    try:
+        user = await db.create_open_user()
+    except PermissionError as exc:
+        raise BusinessError(BusinessErrorCode.OPEN_ACCESS_DISABLED) from exc
+    return success_response(user)
+
+
 # --- Admin ---
 
 
@@ -151,6 +168,10 @@ class AdminInviteCreateRequest(BaseModel):
 
 class AdminInviteUpdateRequest(BaseModel):
     enabled: bool
+
+
+class AdminAccessModeRequest(BaseModel):
+    invite_required: bool
 
 
 def require_admin(authorization: str = Header(default="")) -> str:
@@ -170,6 +191,20 @@ async def create_admin_session(req: AdminLoginRequest):
     except AdminAuthError as exc:
         raise HTTPException(status_code=401, detail="管理员账号或密码错误") from exc
     return success_response({"token": token, "username": req.username})
+
+
+@app.get("/api/admin/access-mode")
+async def get_admin_access_mode(_admin: str = Depends(require_admin)):
+    return success_response({"invite_required": await db.get_invite_required()})
+
+
+@app.patch("/api/admin/access-mode")
+async def update_admin_access_mode(
+    req: AdminAccessModeRequest,
+    _admin: str = Depends(require_admin),
+):
+    required = await db.set_invite_required(req.invite_required)
+    return success_response({"invite_required": required})
 
 
 @app.get("/api/admin/dashboard")
@@ -244,7 +279,7 @@ async def claim_invite(req: ClaimInviteRequest):
 
 
 async def _ensure_invited_user(user_id: str):
-    if not await db.is_valid_invited_user(user_id):
+    if not await db.is_access_user_allowed(user_id):
         raise BusinessError(BusinessErrorCode.INVITE_INVALID)
 
 

@@ -99,6 +99,54 @@ async def test_invite_list_masks_existing_codes(database):
     assert "code" not in page["items"][0]
 
 
+async def test_invite_mode_defaults_to_required_and_persists_updates(database):
+    assert await database.get_invite_required() is True
+
+    await database.set_invite_required(False)
+
+    assert await database.get_invite_required() is False
+
+
+async def test_open_user_is_allowed_only_while_invite_mode_is_disabled(database):
+    await database.set_invite_required(False)
+    user = await database.create_open_user()
+
+    assert user["source"] == "open"
+    assert await database.is_access_user_allowed(user["user_id"]) is True
+
+    await database.set_invite_required(True)
+
+    assert await database.is_access_user_allowed(user["user_id"]) is False
+
+
+async def test_claimed_invite_creates_canonical_user_identity(database):
+    invite = await database.create_invite("邀请用户", code="RUMI-IDENTITY")
+
+    await database.claim_invite(invite["code"])
+    user = await database.get_app_user(invite["user_id"])
+
+    assert user["source"] == "invite"
+    assert user["nickname"] == "邀请用户"
+    assert await database.is_access_user_allowed(invite["user_id"]) is True
+
+
+async def test_initialize_backfills_existing_invited_workspace_user(tmp_path):
+    db_path = str(tmp_path / "legacy.db")
+    first = Database(db_path)
+    await first.initialize()
+    invite = await first.create_invite("历史用户", code="RUMI-HISTORY")
+    await first.create_workspace(invite["user_id"], "历史空间")
+    await first.close()
+
+    reopened = Database(db_path)
+    await reopened.initialize()
+    try:
+        user = await reopened.get_app_user(invite["user_id"])
+        assert user["source"] == "invite"
+    finally:
+        await reopened.close()
+
+
 async def test_admin_dashboard_reports_usage_conversion_and_trends(database):
     first = await database.create_invite("活跃用户", code="RUMI-ACTIVE")
     second = await database.create_invite("普通用户", code="RUMI-SECOND")
@@ -154,6 +202,21 @@ async def test_admin_dashboard_reports_usage_conversion_and_trends(database):
     assert dashboard["trends"][-1]["human_messages"] == 1
     assert "funnel" not in dashboard
     assert "features" not in dashboard
+
+
+async def test_admin_dashboard_includes_open_users(database):
+    await database.set_invite_required(False)
+    user = await database.create_open_user()
+    workspace = await database.create_workspace(user["user_id"], "开放空间")
+    ppt = await database.create_task(workspace["id"], "ppt", "开放用户 PPT")
+    await database.update_task(ppt["id"], status="completed")
+
+    dashboard = await database.get_admin_dashboard(days=7)
+    users = await database.list_admin_users(page=1, page_size=20)
+
+    assert dashboard["kpis"]["total_users"] == 1
+    assert dashboard["kpis"]["core_conversion_rate"] == 100.0
+    assert users["items"][0]["source"] == "open"
 
 
 async def test_admin_user_list_contains_usage_summary(database):

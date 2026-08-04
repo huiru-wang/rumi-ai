@@ -90,6 +90,8 @@ SQLite 由 `backend/src/storage/database.py` 管理，启动时自动建表并�
 | `ppt_style` | `user_id`, `category`, `name`, `name_en`, `description`, `style_description`, `resource_manifest`, `preview_path` | 系统风格和用户自定义风格 |
 | `share_link` | `token`, `task_id`, `workspace_id`, `type`, `revoked_at` | PPT/口播稿公开分享链接 |
 | `invite_code` | `code`, `user_id`, `nickname`, `enabled`, `claimed_at`, `last_claimed_at`, `claim_count` | 邀请码、激活记录和用户入口状态 |
+| `app_user` | `user_id`, `source`, `nickname`, `created_at`, `last_seen_at` | 邀请码用户与开放访客的统一身份；`source` 为 `invite/open` |
+| `system_setting` | `key`, `value`, `updated_at` | 系统运行开关，当前保存 `invite_required` |
 
 系统 PPT 风格来自 `backend/src/storage/seed_data/ppt_styles/`，DB 初始化时会重置并重新 seed `user_id = 'system'` 的记录。
 
@@ -134,8 +136,11 @@ FastAPI 的业务接口统一返回：
 
 | 方法 | 路径 | 说明 |
 |------|------|------|
+| `GET` | `/api/access-mode` | 公开读取当前是否需要邀请码 |
+| `POST` | `/api/access/open-user` | 开放模式下创建独立访客身份 |
 | `POST` | `/api/invites/claim` | 领取数据库邀请码并记录首次/最近使用时间 |
 | `POST` | `/api/admin/session` | 管理员账号密码登录，返回短期 HMAC 会话令牌 |
+| `GET/PATCH` | `/api/admin/access-mode` | 查询或切换邀请码模式 |
 | `GET` | `/api/admin/dashboard` | 7/30 天核心使用指标和趋势 |
 | `GET` | `/api/admin/users` | 已激活用户使用明细分页列表 |
 | `GET/POST/PATCH` | `/api/admin/invites` | 邀请码列表、生成和启停管理 |
@@ -175,6 +180,12 @@ FastAPI 的业务接口统一返回：
 | `GET` | `/api/documents/{doc_id}/asset/{filename}` | 文档解析图片资源代理 |
 
 ## 7. Agent 运行时
+
+### 访问模式
+
+`system_setting.invite_required` 默认是 `true`。开启时，工作区 REST API 只允许有效邀请码用户；关闭时，已登记的 `app_user` 均可访问。开放访客通过 `/api/access/open-user` 由服务端生成独立 UUID，不共享工作区。重新开启邀请码不会删除开放访客或其数据，只会暂时阻止其进入；再次关闭后原浏览器可恢复原身份。
+
+该机制是访问门槛，不是正式账号认证。LangGraph 仍沿用现有 `workspace_id` 状态和共享存储，不新增 graph。
 
 主图只有一个 LangGraph graph：
 

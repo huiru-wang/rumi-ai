@@ -100,3 +100,46 @@ async def test_admin_invite_rejects_invalid_expiration(api_client):
     )
 
     assert response.status_code == 422
+
+
+async def test_access_mode_defaults_to_invite_required(api_client):
+    client, _ = api_client
+
+    response = await client.get("/api/access-mode")
+
+    assert response.status_code == 200
+    assert response.json()["data"] == {"invite_required": True}
+
+
+async def test_admin_can_disable_invites_and_create_open_user(api_client):
+    client, _ = api_client
+    login = await client.post(
+        "/api/admin/session",
+        json={"username": "admin", "password": "test-password"},
+    )
+    token = login.json()["data"]["token"]
+
+    updated = await client.patch(
+        "/api/admin/access-mode",
+        json={"invite_required": False},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    created = await client.post("/api/access/open-user")
+
+    assert updated.json()["data"] == {"invite_required": False}
+    assert created.status_code == 200
+    assert created.json()["data"]["source"] == "open"
+
+
+async def test_open_user_loses_workspace_access_when_invites_are_reenabled(api_client):
+    client, database = api_client
+    await database.set_invite_required(False)
+    user = await database.create_open_user()
+    workspace = await database.create_workspace(user["user_id"], "访客空间")
+
+    open_response = await client.get(f"/api/workspaces?user_id={user['user_id']}")
+    await database.set_invite_required(True)
+    closed_response = await client.get(f"/api/workspaces?user_id={user['user_id']}")
+
+    assert open_response.json()["data"][0]["id"] == workspace["id"]
+    assert closed_response.json()["code"] != 0

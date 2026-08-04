@@ -15,6 +15,7 @@ import {
 } from "lucide-react";
 
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GithubLink } from "@/components/github-link";
 import {
   buildTrendPolyline,
   readAdminToken,
@@ -22,10 +23,12 @@ import {
 } from "@/components/admin/admin-utils";
 import {
   createAdminInvite,
+  getAdminAccessMode,
   getAdminDashboard,
   listAdminInvites,
   listAdminUsers,
   loginAdmin,
+  updateAdminAccessMode,
   updateAdminInvite,
   type AdminDashboard,
   type AdminInvite,
@@ -99,6 +102,7 @@ export default function AdminPage() {
           </div>
           <div className="flex items-center gap-1">
             <ThemeToggle />
+            <GithubLink />
             <button
               onClick={logout}
               className="flex min-h-11 items-center gap-2 rounded-lg px-3 text-sm text-muted-foreground hover:bg-muted hover:text-foreground"
@@ -173,7 +177,10 @@ function AdminLogin({ onAuthenticated }: { onAuthenticated: (token: string) => v
             <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-accent text-accent-foreground"><KeyRound size={19} /></div>
             <div><p className="text-xs text-muted-foreground">RumiAI</p><h1 className="font-semibold">管理后台</h1></div>
           </div>
-          <ThemeToggle />
+          <div className="flex items-center gap-1">
+            <ThemeToggle />
+            <GithubLink />
+          </div>
         </div>
         <label className="mb-4 block text-sm">账号
           <input value={username} onChange={(e) => setUsername(e.target.value)} autoComplete="username" className="mt-2 min-h-11 w-full rounded-lg border border-border bg-muted/40 px-3 outline-none focus:border-accent" />
@@ -254,8 +261,8 @@ function UsersPanel({ token, onUnauthorized }: { token: string; onUnauthorized: 
     return () => window.clearTimeout(timer);
   }, [load]);
   const submit = (event: FormEvent) => { event.preventDefault(); setPage(1); setSearch(keyword.trim()); };
-  return <div className="space-y-4"><SectionTitle title="用户使用情况" subtitle={`共 ${total} 位已激活用户`} /><form onSubmit={submit} className="flex gap-2"><input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索昵称或用户 ID" className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-muted/40 px-3 text-sm outline-none focus:border-accent" /><button className="min-h-11 rounded-lg bg-accent px-4 text-sm text-accent-foreground">搜索</button></form>{error && <ErrorState message={error} retry={load} />}
-    <div className="grid gap-3 lg:grid-cols-2">{users.map((user) => <article key={user.user_id} className="rounded-xl border border-border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-medium">{user.nickname}</h3><p className="mt-1 break-all text-xs text-muted-foreground">{user.user_id}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${user.enabled ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-400"}`}>{user.enabled ? "可用" : "停用"}</span></div><p className="mt-3 text-xs text-muted-foreground">最近活跃：{formatTime(user.last_active_at)}</p><div className="mt-4 grid grid-cols-3 gap-2 text-center">{[["工作区", user.workspace_count], ["文档", user.document_count], ["提问", user.message_count], ["PPT", user.ppt_count], ["口播稿", user.narration_count], ["分享", user.share_count]].map(([label, value]) => <div key={label} className="rounded-lg bg-muted p-2"><p className="font-medium">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>)}</div></article>)}</div><Pagination page={page} total={total} setPage={setPage} /></div>;
+  return <div className="space-y-4"><SectionTitle title="用户使用情况" subtitle={`共 ${total} 位用户`} /><form onSubmit={submit} className="flex gap-2"><input value={keyword} onChange={(e) => setKeyword(e.target.value)} placeholder="搜索昵称或用户 ID" className="min-h-11 min-w-0 flex-1 rounded-lg border border-border bg-muted/40 px-3 text-sm outline-none focus:border-accent" /><button className="min-h-11 rounded-lg bg-accent px-4 text-sm text-accent-foreground">搜索</button></form>{error && <ErrorState message={error} retry={load} />}
+    <div className="grid gap-3 lg:grid-cols-2">{users.map((user) => <article key={user.user_id} className="rounded-xl border border-border p-4"><div className="flex items-start justify-between gap-3"><div><div className="flex items-center gap-2"><h3 className="font-medium">{user.nickname}</h3><span className="rounded-full bg-muted px-2 py-0.5 text-[11px] text-muted-foreground">{user.source === "open" ? "开放访问" : "邀请码"}</span></div><p className="mt-1 break-all text-xs text-muted-foreground">{user.user_id}</p></div><span className={`shrink-0 rounded-full px-2 py-1 text-xs ${user.enabled ? "bg-emerald-500/10 text-emerald-500" : "bg-red-500/10 text-red-400"}`}>{user.enabled ? "可用" : "停用"}</span></div><p className="mt-3 text-xs text-muted-foreground">最近活跃：{formatTime(user.last_active_at)}</p><div className="mt-4 grid grid-cols-3 gap-2 text-center">{[["工作区", user.workspace_count], ["文档", user.document_count], ["提问", user.message_count], ["PPT", user.ppt_count], ["口播稿", user.narration_count], ["分享", user.share_count]].map(([label, value]) => <div key={label} className="rounded-lg bg-muted p-2"><p className="font-medium">{value}</p><p className="text-[11px] text-muted-foreground">{label}</p></div>)}</div></article>)}</div><Pagination page={page} total={total} setPage={setPage} /></div>;
 }
 
 function InvitesPanel({ token, onUnauthorized }: { token: string; onUnauthorized: () => void }) {
@@ -268,15 +275,18 @@ function InvitesPanel({ token, onUnauthorized }: { token: string; onUnauthorized
   const [total, setTotal] = useState(0);
   const [error, setError] = useState("");
   const [submitting, setSubmitting] = useState(false);
-  const load = useCallback(async () => { try { const result = await listAdminInvites(token, page); setItems(result.items); setTotal(result.total); setError(""); } catch (err) { const message = err instanceof Error ? err.message : "邀请码加载失败"; setError(message); if (message.includes("登录")) onUnauthorized(); } }, [onUnauthorized, page, token]);
+  const [inviteRequired, setInviteRequired] = useState<boolean | null>(null);
+  const [modeSaving, setModeSaving] = useState(false);
+  const load = useCallback(async () => { try { const [result, mode] = await Promise.all([listAdminInvites(token, page), getAdminAccessMode(token)]); setItems(result.items); setTotal(result.total); setInviteRequired(mode.invite_required); setError(""); } catch (err) { const message = err instanceof Error ? err.message : "邀请码加载失败"; setError(message); if (message.includes("登录")) onUnauthorized(); } }, [onUnauthorized, page, token]);
   useEffect(() => {
     const timer = window.setTimeout(() => void load(), 0);
     return () => window.clearTimeout(timer);
   }, [load]);
   const create = async (event: FormEvent) => { event.preventDefault(); setSubmitting(true); setError(""); try { const result = await createAdminInvite(token, nickname.trim(), expiresAt ? new Date(expiresAt).toISOString() : null); setGeneratedCode(result.code); setNickname(""); setExpiresAt(""); setPage(1); await load(); } catch (err) { setError(err instanceof Error ? err.message : "生成失败"); } finally { setSubmitting(false); } };
   const toggle = async (invite: AdminInvite) => { try { await updateAdminInvite(token, invite.id, !invite.enabled); await load(); } catch (err) { setError(err instanceof Error ? err.message : "操作失败"); } };
+  const toggleAccessMode = async () => { if (inviteRequired === null) return; const nextRequired = !inviteRequired; if (!nextRequired && !window.confirm("关闭后，任何访客都可以直接进入并使用全部功能。确认关闭邀请码模式吗？")) return; setModeSaving(true); setError(""); try { const mode = await updateAdminAccessMode(token, nextRequired); setInviteRequired(mode.invite_required); } catch (err) { setError(err instanceof Error ? err.message : "访问模式更新失败"); } finally { setModeSaving(false); } };
   const copy = async () => { await navigator.clipboard.writeText(generatedCode); setCopied(true); window.setTimeout(() => setCopied(false), 1500); };
-  return <div className="space-y-5"><SectionTitle title="邀请码管理" subtitle={`共生成 ${total} 个邀请码`} /><form onSubmit={create} className="grid gap-3 rounded-2xl border border-border p-4 md:grid-cols-[1fr_220px_auto] md:items-end"><label className="text-sm">用户昵称<input required value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="例如：张老师" className="mt-2 min-h-11 w-full rounded-lg border border-border bg-muted/40 px-3 outline-none focus:border-accent" /></label><label className="text-sm">过期时间（可选）<input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-muted/40 px-3 outline-none focus:border-accent" /></label><button disabled={submitting || !nickname.trim()} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground disabled:opacity-50">{submitting ? "生成中..." : "生成邀请码"}</button></form>
+  return <div className="space-y-5"><SectionTitle title="邀请码管理" subtitle={`共生成 ${total} 个邀请码`} /><section className="flex items-center justify-between gap-4 rounded-2xl border border-border p-4"><div><h3 className="text-sm font-medium">邀请码模式</h3><p className="mt-1 text-xs leading-5 text-muted-foreground">{inviteRequired === false ? "已关闭，访客可直接进入并使用全部功能。" : "已开启，用户必须输入有效邀请码。"}</p></div><button type="button" role="switch" aria-checked={inviteRequired === true} disabled={inviteRequired === null || modeSaving} onClick={toggleAccessMode} className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-50 ${inviteRequired === true ? "bg-emerald-500" : "bg-muted"}`}><span className={`absolute top-1 h-5 w-5 rounded-full bg-white shadow transition-transform ${inviteRequired === true ? "translate-x-6" : "translate-x-1"}`} /></button></section><form onSubmit={create} className="grid gap-3 rounded-2xl border border-border p-4 md:grid-cols-[1fr_220px_auto] md:items-end"><label className="text-sm">用户昵称<input required value={nickname} onChange={(e) => setNickname(e.target.value)} placeholder="例如：张老师" className="mt-2 min-h-11 w-full rounded-lg border border-border bg-muted/40 px-3 outline-none focus:border-accent" /></label><label className="text-sm">过期时间（可选）<input type="datetime-local" value={expiresAt} onChange={(e) => setExpiresAt(e.target.value)} className="mt-2 min-h-11 w-full rounded-lg border border-border bg-muted/40 px-3 outline-none focus:border-accent" /></label><button disabled={submitting || !nickname.trim()} className="min-h-11 rounded-lg bg-accent px-4 text-sm font-medium text-accent-foreground disabled:opacity-50">{submitting ? "生成中..." : "生成邀请码"}</button></form>
     {generatedCode && <div className="rounded-2xl border border-emerald-500/30 bg-emerald-500/10 p-4"><div className="flex items-center gap-2 text-sm text-emerald-500"><Check size={16} />邀请码已生成，可立即使用</div><div className="mt-3 flex flex-col gap-2 sm:flex-row"><code className="min-w-0 flex-1 overflow-x-auto rounded-lg bg-background px-3 py-3 text-base font-semibold">{generatedCode}</code><button onClick={copy} className="flex min-h-11 items-center justify-center gap-2 rounded-lg border border-border bg-background px-4 text-sm"><Clipboard size={16} />{copied ? "已复制" : "复制"}</button></div><p className="mt-2 text-xs text-muted-foreground">完整邀请码仅在此处显示，请复制后发送给用户。</p></div>}
     {error && <ErrorState message={error} retry={load} />}<div className="grid gap-3 lg:grid-cols-2">{items.map((invite) => <article key={invite.id} className="rounded-xl border border-border p-4"><div className="flex items-start justify-between gap-3"><div><h3 className="font-medium">{invite.nickname}</h3><code className="mt-1 block text-xs text-muted-foreground">{invite.code_masked}</code></div><button onClick={() => toggle(invite)} className={`min-h-10 shrink-0 rounded-lg px-3 text-xs ${invite.enabled ? "bg-red-500/10 text-red-400" : "bg-emerald-500/10 text-emerald-500"}`}>{invite.enabled ? "停用" : "启用"}</button></div><div className="mt-4 grid grid-cols-2 gap-2 text-xs text-muted-foreground"><span>状态：{invite.claimed_at ? "已激活" : "未使用"}</span><span>使用次数：{invite.claim_count}</span><span>生成：{formatTime(invite.created_at)}</span><span>最近使用：{formatTime(invite.last_claimed_at)}</span></div></article>)}</div><Pagination page={page} total={total} setPage={setPage} /></div>;
 }

@@ -3,18 +3,28 @@
 import { useEffect, useState, useCallback, type FormEvent } from "react";
 import { useRouter } from "next/navigation";
 import { KeyRound, Plus } from "lucide-react";
-import { clearInviteUser, getUserId, getUserNickname, setInviteUser } from "@/lib/user";
+import {
+  clearCurrentUser,
+  getOpenUser,
+  getUserId,
+  getUserNickname,
+  setAccessUser,
+  setInviteUser,
+} from "@/lib/user";
 import {
   ApiError,
   claimInvite,
+  createOpenAccessUser,
   listWorkspaces,
   createWorkspace,
   deleteWorkspace,
+  getAccessMode,
   type Workspace,
 } from "@/lib/api";
 import { WorkspaceCard } from "@/components/workspace/workspace-card";
 import { CreateDialog } from "@/components/workspace/create-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GithubLink } from "@/components/github-link";
 import { BetaInfo } from "@/components/beta-info";
 
 export default function Home() {
@@ -23,6 +33,7 @@ export default function Home() {
   const [userId, setUserId] = useState<string | null>(null);
   const [nickname, setNickname] = useState<string | null>(null);
   const [inviteCode, setInviteCode] = useState("");
+  const [inviteRequired, setInviteRequired] = useState(true);
   const [inviteError, setInviteError] = useState("");
   const [claiming, setClaiming] = useState(false);
   const [dialogOpen, setDialogOpen] = useState(false);
@@ -32,26 +43,55 @@ export default function Home() {
   const [deleteError, setDeleteError] = useState("");
 
   const fetchWorkspaces = useCallback(async () => {
-    const currentUserId = getUserId();
-    if (!currentUserId) {
-      setUserId(null);
-      setNickname(null);
-      setWorkspaces([]);
-      setLoading(false);
-      return;
-    }
     setUserId(null);
     setNickname(null);
     setWorkspaces([]);
     setLoading(true);
     try {
-      const data = await listWorkspaces(currentUserId);
+      const mode = await getAccessMode();
+      setInviteRequired(mode.invite_required);
+      let currentUserId = getUserId();
+
+      if (!currentUserId && !mode.invite_required) {
+        const savedOpenUser = getOpenUser();
+        if (savedOpenUser) {
+          setAccessUser(savedOpenUser.userId, savedOpenUser.nickname, "open");
+          currentUserId = savedOpenUser.userId;
+        } else {
+          const openUser = await createOpenAccessUser();
+          setAccessUser(openUser.user_id, openUser.nickname, "open");
+          currentUserId = openUser.user_id;
+        }
+      }
+
+      if (!currentUserId) return;
+
+      let data: Workspace[];
+      try {
+        data = await listWorkspaces(currentUserId);
+      } catch (err) {
+        if (
+          !mode.invite_required &&
+          err instanceof ApiError &&
+          (err.code === 10004 || err.code === 10005)
+        ) {
+          clearCurrentUser();
+          const openUser = await createOpenAccessUser();
+          setAccessUser(openUser.user_id, openUser.nickname, "open");
+          currentUserId = openUser.user_id;
+          data = await listWorkspaces(currentUserId);
+        } else {
+          throw err;
+        }
+      }
+
       setUserId(currentUserId);
       setNickname(getUserNickname());
       setWorkspaces(data);
     } catch (err) {
-      if (err instanceof ApiError && err.code === 10004) {
-        clearInviteUser();
+      if (err instanceof ApiError && (err.code === 10004 || err.code === 10005)) {
+        clearCurrentUser();
+        setInviteRequired(true);
         setUserId(null);
         setNickname(null);
         setWorkspaces([]);
@@ -64,7 +104,8 @@ export default function Home() {
   }, []);
 
   useEffect(() => {
-    fetchWorkspaces();
+    const timer = window.setTimeout(() => void fetchWorkspaces(), 0);
+    return () => window.clearTimeout(timer);
   }, [fetchWorkspaces]);
 
   const handleCreate = async (name: string) => {
@@ -77,8 +118,8 @@ export default function Home() {
       await fetchWorkspaces();
     } catch (err) {
       if (err instanceof ApiError) {
-        if (err.code === 70001) {
-          clearInviteUser();
+        if (err.code === 10004) {
+          clearCurrentUser();
           setUserId(null);
           setNickname(null);
           setInviteError("邀请码已失效，请重新输入。");
@@ -162,7 +203,10 @@ export default function Home() {
             </span>
           )}
         </div>
-        <ThemeToggle />
+        <div className="flex items-center gap-1">
+          <ThemeToggle />
+          <GithubLink />
+        </div>
       </header>
 
       {/* Content */}
@@ -171,7 +215,7 @@ export default function Home() {
           <div className="py-20 text-center text-muted-foreground">
             加载中...
           </div>
-        ) : !userId ? (
+        ) : inviteRequired && !userId ? (
           <div className="mx-auto flex min-h-[60vh] max-w-sm items-center">
             <form
               onSubmit={handleClaimInvite}

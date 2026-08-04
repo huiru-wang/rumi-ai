@@ -13,6 +13,7 @@ import { PPTPlayerDialog } from "@/components/player/ppt-player-dialog";
 import { PPTPreviewDialog } from "@/components/player/ppt-preview-dialog";
 import { StyleExtractionDialog } from "@/components/config/style-extraction-dialog";
 import { ThemeToggle } from "@/components/theme-toggle";
+import { GithubLink } from "@/components/github-link";
 import { BetaInfo } from "@/components/beta-info";
 import type { ExternalCommand } from "@/components/chat/assistant";
 
@@ -171,6 +172,7 @@ export default function WorkspacePage() {
             <Package size={16} />
           </button>
           <ThemeToggle />
+          <GithubLink />
         </div>
       </header>
 

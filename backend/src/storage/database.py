@@ -110,6 +110,18 @@ class Database:
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
+            CREATE TABLE IF NOT EXISTS system_setting (
+                key TEXT PRIMARY KEY,
+                value TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            CREATE TABLE IF NOT EXISTS app_user (
+                user_id TEXT PRIMARY KEY,
+                source TEXT NOT NULL,
+                nickname TEXT NOT NULL,
+                created_at TEXT NOT NULL,
+                last_seen_at TEXT NOT NULL
+            );
             CREATE INDEX IF NOT EXISTS idx_ppt_style_user ON ppt_style(user_id);
             CREATE INDEX IF NOT EXISTS idx_share_link_task_active
                 ON share_link(task_id, revoked_at);
@@ -117,9 +129,33 @@ class Database:
                 ON message(thread_id, id DESC);
             CREATE INDEX IF NOT EXISTS idx_invite_claimed_at
                 ON invite_code(claimed_at);
+            CREATE INDEX IF NOT EXISTS idx_app_user_source
+                ON app_user(source);
             PRAGMA foreign_keys = ON;
         """)
+        now = datetime.now(timezone.utc).isoformat()
+        await self.connection.execute(
+            "INSERT OR IGNORE INTO system_setting (key, value, updated_at) VALUES ('invite_required', 'true', ?)",
+            (now,),
+        )
         await self._migrate_tables()
+        await self.connection.execute(
+            """
+            INSERT OR IGNORE INTO app_user
+                (user_id, source, nickname, created_at, last_seen_at)
+            SELECT
+                i.user_id,
+                'invite',
+                i.nickname,
+                COALESCE(i.claimed_at, i.created_at),
+                COALESCE(i.last_claimed_at, i.claimed_at, i.created_at)
+            FROM invite_code i
+            WHERE i.claimed_at IS NOT NULL
+               OR EXISTS (
+                    SELECT 1 FROM workspace w WHERE w.user_id = i.user_id
+               )
+            """
+        )
         await self.connection.commit()
 
     async def _migrate_tables(self):
@@ -320,6 +356,85 @@ class Database:
 
     # --- Invite codes ---
 
+    async def get_invite_required(self) -> bool:
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT value FROM system_setting WHERE key = 'invite_required'"
+        )
+        row = await cursor.fetchone()
+        return not row or row["value"].lower() == "true"
+
+    async def set_invite_required(self, required: bool) -> bool:
+        await self.ensure_initialized()
+        now = datetime.now(timezone.utc).isoformat()
+        await self.connection.execute(
+            """
+            INSERT INTO system_setting (key, value, updated_at)
+            VALUES ('invite_required', ?, ?)
+            ON CONFLICT(key) DO UPDATE SET value = excluded.value, updated_at = excluded.updated_at
+            """,
+            ("true" if required else "false", now),
+        )
+        await self.connection.commit()
+        return required
+
+    async def create_open_user(self) -> dict:
+        await self.ensure_initialized()
+        if await self.get_invite_required():
+            raise PermissionError("open access is disabled")
+        user_id = str(uuid.uuid4())
+        nickname = f"访客 {user_id[:4].upper()}"
+        now = datetime.now(timezone.utc).isoformat()
+        await self.connection.execute(
+            """
+            INSERT INTO app_user (user_id, source, nickname, created_at, last_seen_at)
+            VALUES (?, 'open', ?, ?, ?)
+            """,
+            (user_id, nickname, now, now),
+        )
+        await self.connection.commit()
+        return {
+            "user_id": user_id,
+            "source": "open",
+            "nickname": nickname,
+            "created_at": now,
+            "last_seen_at": now,
+        }
+
+    async def get_app_user(self, user_id: str) -> dict | None:
+        await self.ensure_initialized()
+        cursor = await self.connection.execute(
+            "SELECT * FROM app_user WHERE user_id = ?", (user_id,)
+        )
+        row = await cursor.fetchone()
+        return dict(row) if row else None
+
+    async def is_access_user_allowed(self, user_id: str) -> bool:
+        await self.ensure_initialized()
+        invite_required = await self.get_invite_required()
+        user = await self.get_app_user(user_id)
+        if not invite_required and user:
+            return True
+        if not await self.is_valid_invited_user(user_id):
+            return False
+        if not user:
+            cursor = await self.connection.execute(
+                "SELECT nickname FROM invite_code WHERE user_id = ?", (user_id,)
+            )
+            invite = await cursor.fetchone()
+            if not invite:
+                return False
+            now = datetime.now(timezone.utc).isoformat()
+            await self.connection.execute(
+                """
+                INSERT OR IGNORE INTO app_user (user_id, source, nickname, created_at, last_seen_at)
+                VALUES (?, 'invite', ?, ?, ?)
+                """,
+                (user_id, invite["nickname"], now, now),
+            )
+            await self.connection.commit()
+        return True
+
     async def import_invites(self, records: list[dict]) -> int:
         """Idempotently import legacy file-backed invite records."""
         await self.ensure_initialized()
@@ -426,6 +541,15 @@ class Database:
             """,
             (claimed_at, now, now, row["id"]),
         )
+        await self.connection.execute(
+            """
+            INSERT INTO app_user (user_id, source, nickname, created_at, last_seen_at)
+            VALUES (?, 'invite', ?, ?, ?)
+            ON CONFLICT(user_id) DO UPDATE SET
+                source = 'invite', nickname = excluded.nickname, last_seen_at = excluded.last_seen_at
+            """,
+            (row["user_id"], row["nickname"], claimed_at, now),
+        )
         await self.connection.commit()
         result = dict(row)
         result.update(
@@ -509,23 +633,23 @@ class Database:
         start_modifier = f"-{safe_days - 1} days"
         active_sql = """
             SELECT w.user_id, w.created_at AS active_at FROM workspace w
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             UNION ALL
             SELECT w.user_id, d.created_at FROM document d
             JOIN workspace w ON w.id = d.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             UNION ALL
             SELECT w.user_id, m.created_at FROM message m
             JOIN workspace w ON w.id = m.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE m.role = 'human'
             UNION ALL
             SELECT w.user_id, t.created_at FROM task t
             JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
         """
         total_users = await self._admin_scalar(
-            "SELECT COUNT(*) FROM invite_code WHERE claimed_at IS NOT NULL"
+            "SELECT COUNT(*) FROM app_user"
         )
         active_today = await self._admin_scalar(
             f"SELECT COUNT(DISTINCT user_id) FROM ({active_sql}) "
@@ -539,7 +663,7 @@ class Database:
             """
             SELECT COUNT(DISTINCT w.user_id)
             FROM task t JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE t.type = 'ppt' AND t.status = 'completed'
             """
         )
@@ -547,7 +671,7 @@ class Database:
             """
             SELECT COUNT(*) FROM task t
             JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE type = 'ppt' AND status = 'completed'
               AND date(t.updated_at) >= date('now', 'localtime', ?)
             """,
@@ -557,7 +681,7 @@ class Database:
             """
             SELECT COUNT(*) FROM task t
             JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE type = 'narration' AND status = 'completed'
               AND date(t.updated_at) >= date('now', 'localtime', ?)
             """,
@@ -589,43 +713,46 @@ class Database:
         safe_page = max(page, 1)
         safe_size = min(max(page_size, 1), 100)
         pattern = f"%{keyword.strip()}%"
-        where = "i.claimed_at IS NOT NULL AND (i.nickname LIKE ? OR i.user_id LIKE ?)"
+        where = "u.nickname LIKE ? OR u.user_id LIKE ?"
         cursor = await self.connection.execute(
-            f"SELECT COUNT(*) AS count FROM invite_code i WHERE {where}",
+            f"SELECT COUNT(*) AS count FROM app_user u WHERE {where}",
             (pattern, pattern),
         )
         total = int((await cursor.fetchone())["count"])
         cursor = await self.connection.execute(
             f"""
             SELECT
-                i.user_id, i.nickname, i.claimed_at, i.last_claimed_at,
-                i.enabled,
-                (SELECT COUNT(*) FROM workspace w WHERE w.user_id = i.user_id) AS workspace_count,
+                u.user_id, u.nickname, u.source,
+                COALESCE(i.claimed_at, u.created_at) AS claimed_at,
+                COALESCE(i.last_claimed_at, u.last_seen_at) AS last_claimed_at,
+                CASE WHEN u.source = 'open' THEN 1 ELSE COALESCE(i.enabled, 0) END AS enabled,
+                (SELECT COUNT(*) FROM workspace w WHERE w.user_id = u.user_id) AS workspace_count,
                 (SELECT COUNT(*) FROM document d JOIN workspace w ON w.id = d.workspace_id
-                    WHERE w.user_id = i.user_id) AS document_count,
+                    WHERE w.user_id = u.user_id) AS document_count,
                 (SELECT COUNT(*) FROM message m JOIN workspace w ON w.id = m.workspace_id
-                    WHERE w.user_id = i.user_id AND m.role = 'human') AS message_count,
+                    WHERE w.user_id = u.user_id AND m.role = 'human') AS message_count,
                 (SELECT COUNT(*) FROM task t JOIN workspace w ON w.id = t.workspace_id
-                    WHERE w.user_id = i.user_id AND t.type = 'ppt' AND t.status = 'completed') AS ppt_count,
+                    WHERE w.user_id = u.user_id AND t.type = 'ppt' AND t.status = 'completed') AS ppt_count,
                 (SELECT COUNT(*) FROM task t JOIN workspace w ON w.id = t.workspace_id
-                    WHERE w.user_id = i.user_id AND t.type = 'narration' AND t.status = 'completed') AS narration_count,
+                    WHERE w.user_id = u.user_id AND t.type = 'narration' AND t.status = 'completed') AS narration_count,
                 (SELECT COUNT(*) FROM share_link s JOIN workspace w ON w.id = s.workspace_id
-                    WHERE w.user_id = i.user_id) AS share_count,
+                    WHERE w.user_id = u.user_id) AS share_count,
                 (SELECT MAX(active_at) FROM (
-                    SELECT w.created_at AS active_at FROM workspace w WHERE w.user_id = i.user_id
+                    SELECT w.created_at AS active_at FROM workspace w WHERE w.user_id = u.user_id
                     UNION ALL
                     SELECT d.created_at FROM document d JOIN workspace w ON w.id = d.workspace_id
-                        WHERE w.user_id = i.user_id
+                        WHERE w.user_id = u.user_id
                     UNION ALL
                     SELECT m.created_at FROM message m JOIN workspace w ON w.id = m.workspace_id
-                        WHERE w.user_id = i.user_id AND m.role = 'human'
+                        WHERE w.user_id = u.user_id AND m.role = 'human'
                     UNION ALL
                     SELECT t.created_at FROM task t JOIN workspace w ON w.id = t.workspace_id
-                        WHERE w.user_id = i.user_id
+                        WHERE w.user_id = u.user_id
                 )) AS last_active_at
-            FROM invite_code i
+            FROM app_user u
+            LEFT JOIN invite_code i ON i.user_id = u.user_id
             WHERE {where}
-            ORDER BY COALESCE(last_active_at, i.claimed_at) DESC
+            ORDER BY COALESCE(last_active_at, i.claimed_at, u.created_at) DESC
             LIMIT ? OFFSET ?
             """,
             (pattern, pattern, safe_size, (safe_page - 1) * safe_size),
@@ -663,7 +790,7 @@ class Database:
             """
             SELECT date(m.created_at) AS day, COUNT(*) AS count FROM message m
             JOIN workspace w ON w.id = m.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE m.role = 'human' AND date(m.created_at) >= date('now', 'localtime', ?)
             GROUP BY date(m.created_at)
             """
@@ -672,7 +799,7 @@ class Database:
             """
             SELECT date(d.created_at) AS day, COUNT(*) AS count FROM document d
             JOIN workspace w ON w.id = d.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE date(d.created_at) >= date('now', 'localtime', ?)
             GROUP BY date(d.created_at)
             """
@@ -681,7 +808,7 @@ class Database:
             """
             SELECT date(t.updated_at) AS day, COUNT(*) AS count FROM task t
             JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE t.type = 'ppt' AND t.status = 'completed'
               AND date(t.updated_at) >= date('now', 'localtime', ?)
             GROUP BY date(t.updated_at)
@@ -691,7 +818,7 @@ class Database:
             """
             SELECT date(t.updated_at) AS day, COUNT(*) AS count FROM task t
             JOIN workspace w ON w.id = t.workspace_id
-            JOIN invite_code i ON i.user_id = w.user_id AND i.claimed_at IS NOT NULL
+            JOIN app_user u ON u.user_id = w.user_id
             WHERE t.type = 'narration' AND t.status = 'completed'
               AND date(t.updated_at) >= date('now', 'localtime', ?)
             GROUP BY date(t.updated_at)

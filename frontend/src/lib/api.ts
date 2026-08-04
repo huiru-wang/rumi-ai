@@ -116,6 +116,24 @@ export interface InviteClaim {
   nickname: string;
 }
 
+export interface AccessMode {
+  invite_required: boolean;
+}
+
+export interface OpenAccessUser {
+  user_id: string;
+  nickname: string;
+  source: "open";
+}
+
+export function getAccessMode(): Promise<AccessMode> {
+  return request("/api/access-mode");
+}
+
+export function createOpenAccessUser(): Promise<OpenAccessUser> {
+  return request("/api/access/open-user", { method: "POST" });
+}
+
 export function claimInvite(code: string): Promise<InviteClaim> {
   return request("/api/invites/claim", {
     method: "POST",
@@ -645,6 +663,7 @@ export interface AdminDashboard {
 export interface AdminUserSummary {
   user_id: string;
   nickname: string;
+  source: "invite" | "open";
   claimed_at: string;
   last_claimed_at: string;
   last_active_at: string | null;
@@ -719,6 +738,20 @@ export function loginAdmin(username: string, password: string): Promise<{ token:
 
 export function getAdminDashboard(token: string, days: 7 | 30): Promise<AdminDashboard> {
   return adminRequest(`/api/admin/dashboard?days=${days}`, token);
+}
+
+export function getAdminAccessMode(token: string): Promise<AccessMode> {
+  return adminRequest("/api/admin/access-mode", token);
+}
+
+export function updateAdminAccessMode(
+  token: string,
+  inviteRequired: boolean,
+): Promise<AccessMode> {
+  return adminRequest("/api/admin/access-mode", token, {
+    method: "PATCH",
+    body: JSON.stringify({ invite_required: inviteRequired }),
+  });
 }
 
 export function listAdminUsers(
